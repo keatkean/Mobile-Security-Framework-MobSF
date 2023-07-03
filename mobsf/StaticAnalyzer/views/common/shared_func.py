@@ -7,6 +7,7 @@ Module providing the shared functions for iOS and Android
 import io
 import hashlib
 import logging
+import os
 import platform
 import re
 import shutil
@@ -14,7 +15,7 @@ import subprocess
 import zipfile
 from urllib.parse import urlparse
 from pathlib import Path
-
+import zipfile
 import requests
 
 from django.utils import timezone
@@ -52,19 +53,61 @@ def hash_gen(app_path) -> tuple:
         logger.exception('Generating Hashes')
 
 
-def unzip(app_path, ext_path):
-    logger.info('Unzipping')
+def is_encrypted(app_path):
     try:
-        files = []
+        with zipfile.ZipFile(app_path) as zf:
+            zf.testzip()
+        return False  # No exception raised, file is not encrypted
+    except RuntimeError as e:
+        if 'encrypted' in str(e):
+            return True  # Exception raised and indicates encryption
+        else:
+            raise  # Re-raise exception if it's not related to encryption
+
+
+def zip_directory(directory_path, zip_path):
+    try:
+        with zipfile.ZipFile(zip_path, 'w', zipfile.ZIP_DEFLATED) as zip_file:
+            for root, _, files in os.walk(directory_path):
+                for file in files:
+                    file_path = os.path.join(root, file)
+                    arc_name = os.path.relpath(file_path, directory_path)
+                    zip_file.write(file_path, arcname=arc_name)
+
+        logger.info(f"Directory '{directory_path}' successfully zipped to '{zip_path}'.")
+        return True
+    except FileNotFoundError:
+        logger.error(f"Directory '{directory_path}' not found.")
+        return False
+    except Exception as e:
+        logger.exception(f"An error occurred while zipping the directory: {str(e)}")
+        return False
+
+
+def unzip_file_directory(app_path, ext_path, password=None):
+    logger.info('Unzipping Files and Directories')
+    try:
+        extracted_items = []  # List to store extracted files and directories
         with zipfile.ZipFile(app_path, 'r') as zipptr:
+            if is_encrypted(app_path) and password:
+                zipptr.setpassword(password.encode())
             for fileinfo in zipptr.infolist():
                 filename = fileinfo.filename
                 if not isinstance(filename, str):
-                    filename = str(
-                        filename, encoding='utf-8', errors='replace')
-                files.append(filename)
-                zipptr.extract(filename, ext_path)
-        return files
+                    filename = str(filename, encoding='utf-8', errors='replace')
+                extracted_path = os.path.join(ext_path, filename)
+                if filename.endswith('/'):  # Directory entry
+                    extracted_items.append(filename)  # Add directory name to the list
+                    os.makedirs(extracted_path, exist_ok=True)
+                else:  # File entry
+                    extracted_items.append(filename)  # Add file name to the list
+                    zipptr.extract(filename, ext_path)
+        return extracted_items
+    except RuntimeError as e:
+        if str(e) == 'Bad password for file':
+            logger.error('Invalid password provided for the encrypted zip file.')
+        else:
+            logger.exception('Unzipping Error: %s', str(e))
     except Exception:
         logger.exception('Unzipping Error')
         if platform.system() == 'Windows':
@@ -73,8 +116,51 @@ def unzip(app_path, ext_path):
             logger.info('Using the Default OS Unzip Utility.')
             try:
                 unzip_b = shutil.which('unzip')
-                subprocess.call(
-                    [unzip_b, '-o', '-q', app_path, '-d', ext_path])
+                if password:
+                    subprocess.call([unzip_b, '-o', '-P', password, '-q', app_path, '-d', ext_path])
+                else:
+                    subprocess.call([unzip_b, '-o', '-q', app_path, '-d', ext_path])
+                dat = subprocess.check_output([unzip_b, '-qq', '-l', app_path])
+                dat = dat.decode('utf-8').split('\n')
+                extracted_items = ['Length   Date   Time   Name']
+                extracted_items += dat
+                return extracted_items
+            except Exception:
+                logger.exception('Unzipping Error')
+
+
+def unzip(app_path, ext_path, password=None):
+    logger.info('Unzipping')
+    try:
+        files = []
+        with zipfile.ZipFile(app_path, 'r') as zipptr:
+            if is_encrypted(app_path) and password:
+                zipptr.setpassword(password.encode())
+            for fileinfo in zipptr.infolist():
+                filename = fileinfo.filename
+                if not isinstance(filename, str):
+                    filename = str(
+                        filename, encoding='utf-8', errors='replace')
+                files.append(filename)
+                zipptr.extract(filename, ext_path)
+        return files
+    except RuntimeError as e:
+        if str(e) == 'Bad password for file':
+            logger.error('Invalid password provided for the encrypted zip file.')
+        else:
+            logger.exception('Unzipping Error: %s', str(e))
+    except Exception:
+        logger.exception('Unzipping Error')
+        if platform.system() == 'Windows':
+            logger.info('Not yet Implemented.')
+        else:
+            logger.info('Using the Default OS Unzip Utility.')
+            try:
+                unzip_b = shutil.which('unzip')
+                if password:
+                    subprocess.call([unzip_b, '-o', '-P', password, '-q', app_path, '-d', ext_path])
+                else:
+                    subprocess.call([unzip_b, '-o', '-q', app_path, '-d', ext_path])
                 dat = subprocess.check_output([unzip_b, '-qq', '-l', app_path])
                 dat = dat.decode('utf-8').split('\n')
                 files_det = ['Length   Date   Time   Name']

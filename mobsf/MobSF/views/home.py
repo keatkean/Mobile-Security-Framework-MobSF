@@ -6,6 +6,7 @@ import os
 import platform
 import re
 import shutil
+import zipfile
 from pathlib import Path
 from wsgiref.util import FileWrapper
 
@@ -131,6 +132,16 @@ class Upload(object):
         content_type = self.file.content_type
         file_name = self.file.name
         logger.info('MIME Type: %s FILE: %s', content_type, file_name)
+        if self.file_type.is_zip():
+            zip_password = request.POST.get('password')
+            if zip_password:
+                return scanning.scan_encrypted_zip(zip_password)
+            else:
+                return scanning.scan_encrypted_zip()
+        else:
+            return self.upload_scan(scanning)
+
+    def upload_scan(self, scanning):
         if self.file_type.is_apk():
             return scanning.scan_apk()
         elif self.file_type.is_xapk():
@@ -141,8 +152,8 @@ class Upload(object):
             return scanning.scan_jar()
         elif self.file_type.is_aar():
             return scanning.scan_aar()
-        elif self.file_type.is_zip():
-            return scanning.scan_zip()
+        # elif self.file_type.is_zip():
+        #     return scanning.scan_zip()
         elif self.file_type.is_ipa():
             return scanning.scan_ipa()
         elif self.file_type.is_appx():
@@ -261,7 +272,7 @@ def search(request):
         db_obj = RecentScansDB.objects.filter(MD5=md5)
         if db_obj.exists():
             e = db_obj[0]
-            url = (f'/{e.ANALYZER }/?name={e.FILE_NAME}&'
+            url = (f'/{e.ANALYZER}/?name={e.FILE_NAME}&'
                    f'checksum={e.MD5}&type={e.SCAN_TYPE}')
             return HttpResponseRedirect(url)
         else:
