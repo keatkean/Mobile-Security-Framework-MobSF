@@ -51,7 +51,7 @@ def handle_uploaded_file(content, extension, istemp=False):
     """Write Uploaded File."""
     md5 = hashlib.md5()
     bfr = False
-    # logger.info('Type of content: %s', type(content))
+    # logger.info('Content: %s, Type of content: %s', content, type(content))
     if isinstance(content, InMemoryUploadedFile) or isinstance(content, TemporaryUploadedFile):
         bfr = True
         # Not File upload
@@ -104,6 +104,7 @@ class Scanning(object):
     def __init__(self, request):
         self.file = request.FILES['file']
         self.file_name = request.FILES['file'].name
+        self.zip_password = request.POST.get('password')
         self.data = {
             'analyzer': 'static_analyzer',
             'status': 'success',
@@ -247,11 +248,11 @@ class Scanning(object):
                 error_response = {'fullFilePath': full_file_path, 'file': file_name, 'error': error_message}
                 return error_response, True
 
-    def scan_encrypted_zip(self, password=None):
+    def scan_encrypted_zip(self):
         md5 = handle_uploaded_file(self.file, '.zip', istemp=True)
         temp_dir = os.path.join(settings.TEMP_DIR, md5 + '/')
         file = os.path.join(temp_dir, md5 + '.zip')
-        extracted_items = unzip_file_directory(file, temp_dir, password)
+        extracted_items = unzip_file_directory(file, temp_dir, self.zip_password)
         results = []  # store data
         errors = []  # store errors
         if len(extracted_items) == 0:
