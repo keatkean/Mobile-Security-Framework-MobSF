@@ -47,7 +47,7 @@ def upstream_proxy(flaw_type):
             proxy_port = str(settings.UPSTREAM_PROXY_PORT)
             proxy_host = '{}://{}:{}'.format(
                 settings.UPSTREAM_PROXY_TYPE,
-                settings.UPSTREAM_PROXY_IP,
+                docker_translate_proxy_ip(settings.UPSTREAM_PROXY_IP),
                 proxy_port)
             proxies = {flaw_type: proxy_host}
         else:
@@ -56,7 +56,7 @@ def upstream_proxy(flaw_type):
                 settings.UPSTREAM_PROXY_TYPE,
                 settings.UPSTREAM_PROXY_USERNAME,
                 settings.UPSTREAM_PROXY_PASSWORD,
-                settings.UPSTREAM_PROXY_IP,
+                docker_translate_proxy_ip(settings.UPSTREAM_PROXY_IP),
                 proxy_port)
             proxies = {flaw_type: proxy_host}
     else:
@@ -321,22 +321,54 @@ def find_process_by(name):
     return proc
 
 
+def docker_translate_localhost(identifier):
+    """Convert localhost to host.docker.internal."""
+    if not identifier:
+        return identifier
+    if not os.getenv('MOBSF_PLATFORM') == 'docker':
+        return identifier
+    try:
+        identifier = identifier.strip()
+        docker_internal = 'host.docker.internal:'
+        if re.match(r'^emulator-\d{4}$', identifier):
+            adb_port = int(identifier.split('emulator-')[1]) + 1
+            # ADB port is console port + 1
+            return f'{docker_internal}{adb_port}'
+        m = re.match(r'^(localhost|127\.0\.0\.1):\d{1,5}$', identifier)
+        if m:
+            adb_port = int(identifier.split(m.group(1))[1].replace(':', ''))
+            return f'{docker_internal}{adb_port}'
+        return identifier
+    except Exception:
+        logger.exception('Failed to convert device '
+                         'identifier for docker connectivity')
+        return identifier
+
+
+def docker_translate_proxy_ip(ip):
+    """Convert localhost proxy ip to host.docker.internal."""
+    if not os.getenv('MOBSF_PLATFORM') == 'docker':
+        return ip
+    if ip and ip.strip() in ('127.0.0.1', 'localhost'):
+        return 'host.docker.internal'
+    return ip
+
+
 def get_device():
     """Get Device."""
     if os.getenv('ANALYZER_IDENTIFIER'):
-        return os.getenv('ANALYZER_IDENTIFIER')
-    if settings.ANALYZER_IDENTIFIER:
-        return settings.ANALYZER_IDENTIFIER
+        return docker_translate_localhost(
+            os.getenv('ANALYZER_IDENTIFIER'))
+    elif settings.ANALYZER_IDENTIFIER:
+        return docker_translate_localhost(
+            settings.ANALYZER_IDENTIFIER)
     else:
         dev_id = ''
         out = subprocess.check_output([get_adb(), 'devices']).splitlines()
         if len(out) > 2:
             dev_id = out[1].decode('utf-8').split('\t')[0]
-            return dev_id
-    logger.error('Is the Android VM running?\n'
-                 'MobSF cannot identify device id.\n'
-                 'Please set ''ANALYZER_IDENTIFIER in '
-                 '%s', get_config_loc())
+            return docker_translate_localhost(dev_id)
+    logger.error(get_android_dm_exception_msg())
 
 
 def get_adb():
@@ -644,3 +676,14 @@ def android_component(data):
     elif 'Broadcast Receiver' in data:
         cmp = 'receiver_'
     return cmp
+
+
+def get_android_dm_exception_msg():
+    return (
+        'Is your Android VM/emulator running? MobSF cannot'
+        ' find the android device identifier.'
+        ' Please run an android instance and refresh'
+        ' this page. If this error persists,'
+        ' set ANALYZER_IDENTIFIER in '
+        f'{get_config_loc()} or via environment variable'
+        ' MOBSF_ANALYZER_IDENTIFIER')
