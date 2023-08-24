@@ -3,9 +3,11 @@
 import logging
 from pathlib import Path
 
-from django.conf import settings
-
 import lief
+
+from mobsf.MobSF.utils import (
+    settings_enabled,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -185,21 +187,39 @@ class Checksec:
         return fortified_funcs
 
     def strings(self):
-        return self.elf.strings
+        try:
+            return self.elf.strings
+        except Exception:
+            return []
+
+    def get_symbols(self):
+        symbols = []
+        try:
+            for i in self.elf.symbols:
+                symbols.append(i.name)
+        except Exception:
+            pass
+        return symbols
 
 
 def elf_analysis(app_dir: str) -> dict:
     """Perform elf analysis on shared object."""
-    elf = {'elf_analysis': [], 'elf_strings': []}
+    elf = {
+        'elf_analysis': [],
+        'elf_strings': [],
+        'elf_symbols': [],
+    }
     try:
-        if not getattr(settings, 'SO_ANALYSIS_ENABLED', True):
+        if not settings_enabled('SO_ANALYSIS_ENABLED'):
             return elf
         logger.info('Binary Analysis Started')
-        # Supports APK, AAR and JAR
+        sdir = Path(app_dir)
+        # Supports APK, SO, AAR and JAR
         libs = [
-            Path(app_dir) / 'lib',
-            Path(app_dir) / 'libs',
-            Path(app_dir) / 'jni']
+            sdir,
+            sdir / 'lib',
+            sdir / 'libs',
+            sdir / 'jni']
         for lib_dir in libs:
             if not lib_dir.is_dir():
                 continue
@@ -211,11 +231,18 @@ def elf_analysis(app_dir: str) -> dict:
                 logger.info('Analyzing %s', so_rel)
                 chk = Checksec(sofile, so_rel)
                 elf_find = chk.checksec()
+                elf_str = chk.strings()
+                elf_sym = chk.get_symbols()
                 if elf_find:
                     elf['elf_analysis'].append(
                         elf_find)
+                if elf_str:
                     elf['elf_strings'].append(
-                        {so_rel: chk.strings()})
+                        {so_rel: elf_str})
+                if elf_sym:
+                    elf['elf_symbols'].append(
+                        {so_rel: elf_sym})
+
     except Exception:
         logger.exception('Performing Binary Analysis')
     return elf
