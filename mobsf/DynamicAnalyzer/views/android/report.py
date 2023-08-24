@@ -40,6 +40,42 @@ from mobsf.MobSF.utils import (
 logger = logging.getLogger(__name__)
 register.filter('key', key)
 
+# Added Frida Log Analysis Function
+def filter_frida_logs(app_dir, keywords):
+    """
+    Filter Frida logs for a list of keywords and save to a file for log analysis (remove noisy data).
+
+    param app_dir: Directory containing the log files.
+    param keywords: A dictionary or list of keywords to filter. If a dictionary, the values must be booleans.
+    """
+    frida_log_file = os.path.join(app_dir, 'mobsf_frida_out.txt')
+    log_analysis_file = os.path.join(app_dir, 'log_analysis.txt')
+
+    if not os.path.exists(frida_log_file):
+        logger.warning(f"Frida log file {frida_log_file} does not exist.")
+        return
+
+    written_lines = set()  # To store lines that have been written, prevents duplicate data from being displayed
+
+    try:
+        with open(frida_log_file, 'r') as frida_logs, open(log_analysis_file, 'w') as log_analysis:
+            for line in frida_logs:
+                if isinstance(keywords, dict):  # filtering and writing
+                    if any(keyword in line for keyword, enabled in keywords.items() if enabled):
+                        if line not in written_lines:
+                            log_analysis.write(line)
+                            written_lines.add(line)
+                elif isinstance(keywords, list):
+                    if any(keyword in line for keyword in keywords):
+                        if line not in written_lines:
+                            log_analysis.write(line)
+                            written_lines.add(line)
+                else:
+                    raise ValueError("Keywords must be either a dictionary or a list.")
+    except Exception as e:
+        logger.error(f"An error occurred while filtering Frida logs: {e}")
+
+
 
 def view_report(request, checksum, api=False):
     """Dynamic Analysis Report Generation."""
@@ -79,6 +115,15 @@ def view_report(request, checksum, api=False):
         trackers = trk.get_trackers_domains_or_deps(domains, deps)
         generate_download(app_dir, checksum, download_dir, package)
         images = get_screenshots(checksum, download_dir)
+        # Frida Log Analysis
+        filter_frida_logs(app_dir, settings.FRIDA_LOG_ANALYSIS_KEYWORDS)
+        log_analysis_file = os.path.join(app_dir, 'log_analysis.txt')  
+        if is_file_exists(log_analysis_file):
+            with open(log_analysis_file, 'r') as file:
+                log_analysis = file.read()
+        else:
+            log_analysis = None
+
         context = {'hash': checksum,
                    'emails': analysis_result['emails'],
                    'urls': analysis_result['urls'],
@@ -99,7 +144,8 @@ def view_report(request, checksum, api=False):
                    'runtime_dependencies': list(deps),
                    'package': package,
                    'version': settings.MOBSF_VER,
-                   'title': 'Dynamic Analysis'}
+                   'title': 'Dynamic Analysis',
+                   'log_analysis': log_analysis}
         template = 'dynamic_analysis/android/dynamic_report.html'
         if api:
             return context
