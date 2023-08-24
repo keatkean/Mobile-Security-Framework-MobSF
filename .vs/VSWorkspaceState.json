@@ -2,14 +2,11 @@
   "ExpandedNodes": [
     "",
     "\\mobsf",
-    "\\mobsf\\DynamicAnalyzer\\views",
-    "\\mobsf\\DynamicAnalyzer\\views\\android",
     "\\mobsf\\MobSF",
     "\\mobsf\\MobSF\\views",
     "\\mobsf\\StaticAnalyzer",
     "\\mobsf\\StaticAnalyzer\\views",
     "\\mobsf\\StaticAnalyzer\\views\\android"
   ],
-  "SelectedNode": "\\mobsf\\MobSF\\views\\home.py",
   "PreviewInSolutionExplorer": false
 }
