@@ -14,8 +14,10 @@ from mobsf.MobSF.utils import (
 )
 from mobsf.StaticAnalyzer.models import StaticAnalyzerIOS
 from mobsf.StaticAnalyzer.views.ios.binary_analysis import (
-    dylibs_analysis,
     get_bin_info,
+)
+from mobsf.StaticAnalyzer.views.common.binary.lib_analysis import (
+    library_analysis,
 )
 from mobsf.StaticAnalyzer.views.ios.binary_rule_matcher import (
     binary_rule_matcher,
@@ -94,11 +96,11 @@ def dylib_analysis(request, app_dict, rescan, api):
             'bin_type': 'Dylib',
         }
         # Analyze dylib
-        dy = dylibs_analysis(app_dict['bin_dir'])
-        bin_dict['dylib_analysis'] = dy['dylib_analysis']
+        dy = library_analysis(app_dict['bin_dir'], 'macho')
+        bin_dict['dylib_analysis'] = dy['macho_analysis']
         # Store Symbols in File Analysis
         all_files['special_files'] = get_symbols(
-            dy['dylib_symbols'])
+            dy['macho_symbols'])
         # Binary code analysis on dylib symbols
         binary_rule_matcher(
             bin_dict['bin_code_analysis'],
@@ -111,7 +113,7 @@ def dylib_analysis(request, app_dict, rescan, api):
             app_dict,
             bin_dict,
             all_files,
-            dy['dylib_strings'])
+            dy['macho_strings'])
 
         # Domain Extraction and Malware Check
         logger.info('Performing Malware Check on '

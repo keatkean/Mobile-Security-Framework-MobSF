@@ -21,7 +21,7 @@ logger = logging.getLogger(__name__)
 #       MOBSF CONFIGURATION
 # !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!
 BANNER, VERSION, MOBSF_VER = get_mobsf_version()
-USE_HOME = False
+USE_HOME = True
 # True : All Uploads/Downloads will be stored in user's home directory
 # False : All Uploads/Downloads will be stored under MobSF root directory
 
@@ -74,6 +74,7 @@ ALLOWED_EXTENSIONS = {
     '.aar': 'application/octet-stream',
     '.so': 'application/octet-stream',
     '.dylib': 'application/octet-stream',
+    '.a': 'application/octet-stream',
 }
 # =============ALLOWED MIMETYPES=================
 APK_MIME = [
@@ -88,6 +89,8 @@ IPA_MIME = [
     'application/octet-stream',
     'application/x-itunes-ipa',
     'application/x-zip-compressed',
+    'application/x-ar',
+    'text/vnd.a',
     'binary/octet-stream',
 ]
 ZIP_MIME = [
@@ -327,7 +330,7 @@ else:
     # Disable CVSSV2 Score by default
     CVSS_SCORE_ENABLED = bool(os.getenv('MOBSF_CVSS_SCORE_ENABLED', ''))
     # NIAP Scan
-    NIAP_ENABLED = os.getenv('MOBSF_NIAP_ENABLED', '1')
+    NIAP_ENABLED = os.getenv('MOBSF_NIAP_ENABLED', '')
     # Dex 2 Smali Conversion
     DEX2SMALI_ENABLED = os.getenv('MOBSF_DEX2SMALI_ENABLED', '1')
     # Android Shared Object Binary Analysis
@@ -420,8 +423,8 @@ else:
     # Get AppMonsta API from https://appmonsta.com/dashboard/get_api_key/
     APPMONSTA_API = os.getenv('MOBSF_APPMONSTA_API', '')
     # ----------VirusTotal--------------------------
-    VT_ENABLED = bool(os.getenv('MOBSF_VT_ENABLED', 'True'))
-    VT_API_KEY = os.getenv('MOBSF_VT_API_KEY', 'd3bce791213bf5c2970b32a58a80ba25e328894a8c790218cfd34611e199b928')
+    VT_ENABLED = bool(os.getenv('MOBSF_VT_ENABLED', ''))
+    VT_API_KEY = os.getenv('MOBSF_VT_API_KEY', '')
     VT_UPLOAD = bool(os.getenv('MOBSF_VT_UPLOAD', ''))
     # Before setting VT_ENABLED to True,
     # Make sure VT_API_KEY is set to your VirusTotal API key
