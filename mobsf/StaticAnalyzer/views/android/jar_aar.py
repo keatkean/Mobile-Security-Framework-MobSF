@@ -88,8 +88,6 @@ def common_analysis(request, app_dic, rescan, api, analysis_type):
             app_dic['manifest_file'] = mani_file
             app_dic['ns'] = ns
             app_dic['parsed_xml'] = mani_xml
-            app_dic['mani'] = (
-                f'../manifest_view/?md5={app_dic["md5"]}&type=aar')
             man_data_dic = manifest_data(app_dic['parsed_xml'], ns)
             man_an_dic = manifest_analysis(
                 app_dic['parsed_xml'],
@@ -105,7 +103,6 @@ def common_analysis(request, app_dic, rescan, api, analysis_type):
         else:
             app_dic['manifest_file'] = None
             app_dic['parsed_xml'] = ''
-            app_dic['mani'] = ''
             man_data_dic = {
                 'services': [],
                 'activities': [],
@@ -134,7 +131,6 @@ def common_analysis(request, app_dic, rescan, api, analysis_type):
                 },
                 'browsable_activities': {},
                 'permissions': {},
-                'icon_hidden': True,
                 'network_security': {
                     'network_findings': [],
                     'network_summary': {},
@@ -147,7 +143,6 @@ def common_analysis(request, app_dic, rescan, api, analysis_type):
             }
         app_dic['real_name'] = ''
         elf_dict = library_analysis(app_dic['app_dir'], 'elf')
-        apkid_results = obfuscated_check(app_dic['app_dir'])
         tracker = Trackers.Trackers(
             app_dic['app_dir'],
             app_dic['tools_dir'])
@@ -162,7 +157,7 @@ def common_analysis(request, app_dic, rescan, api, analysis_type):
             app_dic['app_dir'],
             'apk',
             app_dic['manifest_file'])
-
+        obfuscated_check(app_dic['app_dir'], code_an_dic)
         quark_results = []
         # Get the strings and metadata
         get_strings_metadata(
@@ -183,8 +178,6 @@ def common_analysis(request, app_dic, rescan, api, analysis_type):
             code_an_dic['urls_list'])
 
         app_dic['zipped'] = analysis_type
-        app_dic['icon_hidden'] = True
-        app_dic['icon_found'] = False
         context = save_get_ctx(
             app_dic,
             man_data_dic,
@@ -192,7 +185,7 @@ def common_analysis(request, app_dic, rescan, api, analysis_type):
             code_an_dic,
             cert_dic,
             elf_dict['elf_analysis'],
-            apkid_results,
+            {},
             quark_results,
             tracker_res,
             rescan,
@@ -222,9 +215,20 @@ def aar_analysis(request, app_dic, rescan, api):
     return common_analysis(request, app_dic, rescan, api, 'aar')
 
 
-def obfuscated_check(src):
+def obfuscated_check(src, code_an_dic):
     """Check if JAR/AAR is obfuscated."""
     logger.info('Checking for Obfuscation')
+    metadata = {
+        'cvss': 0,
+        'cwe': '',
+        'owasp-mobile': '',
+        'masvs': '',
+        'ref': '',
+        'description': (
+            'The binary might not be obfuscated.'
+            ' LocalVariableTable is present in class file.'),
+        'severity': 'info',
+    }
     try:
         app_dir = Path(src)
         # Extract all jar files
@@ -241,7 +245,18 @@ def obfuscated_check(src):
             cls_dat = i.read_text(
                 encoding='utf-8', errors='ignore')
             if 'LocalVariableTable' in cls_dat:
-                return {'obfuscated': False}
+                code_an_dic['findings']['aar_class_obfuscation'] = {
+                    'files': {i.name: '1,1'},
+                    'metadata': metadata,
+                }
+                return
     except Exception:
         logger.exception('Obfuscation Check')
-    return {'obfuscated': True}
+    metadata['description'] = (
+        'The binary might be obfuscated.'
+        ' LocalVariableTable is absent in class file.')
+    code_an_dic['findings']['aar_class_obfuscation'] = {
+        'files': {},
+        'metadata': metadata,
+    }
+    return

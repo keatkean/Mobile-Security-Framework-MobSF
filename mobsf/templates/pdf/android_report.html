@@ -44,7 +44,7 @@
       </div>
       </br></br></br>
      <div class="app">
-      <img class="center" id="icon" src="{% if icon_found %}{{dwd_dir}}{{ md5 }}-icon.png{% else %}{{base_url}}{% static 'img/no_icon.png' %}{% endif %}" alt="app_icon"/>
+      <img class="center" id="icon" src="{% if icon_path %}{{dwd_dir}}{{icon_path}}{% else %}{{base_url}}{% static 'img/no_icon.png' %}{% endif %}" alt="app_icon"/>
      </div>
       <div class="center">
         <h1><i class="fab fa-android"></i> {% if app_name %}  {{ app_name }}  {% else %} {{ file_name }} {% endif %} {% if version_name %}  ({{version_name}}) {% endif %}</h1>
@@ -185,18 +185,6 @@
       <h5>Max SDK:</h5> {{ max_sdk }}</br>
       <h5>Android Version Name:</h5> {{ version_name }}</br>
       <h5>Android Version Code:</h5> {{ version_code }}</br>
-{% endif %}
-
-{% if app_type in 'jar,aar' %}
-<p>
-{% for _, value in apkid.items %}
-   {% if value %}
-     The binary might be obfuscated. LocalVariableTable is absent in class file.
-   {% else %}
-     The binary might not be obfuscated. LocalVariableTable is present in class file.
-   {% endif %}
-{% endfor %}
-</p>
 {% endif %}
 
 {% if app_type not in 'jar,aar,so' %}

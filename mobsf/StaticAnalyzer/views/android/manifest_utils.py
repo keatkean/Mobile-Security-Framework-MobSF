@@ -68,6 +68,7 @@ def get_manifest_apk(app_path, app_dir, tools_dir):
         output_dir = os.path.join(app_dir, 'apktool_out')
         args = [find_java_binary(),
                 '-jar',
+                '-Djdk.util.zip.disableZip64ExtraFieldValidation=true',
                 apktool_path,
                 '--match-original',
                 '--frame-path',
@@ -135,6 +136,8 @@ def get_manifest(app_path, app_dir, tools_dir, typ):
         logger.info('Parsing AndroidManifest.xml')
         xml_str = mfile.read_text('utf-8', 'ignore')
         ns = get_xml_namespace(xml_str)
+        if ns and ns == 'xmlns':
+            ns = 'android'
         if ns and ns != 'android':
             logger.warning('Non standard XML namespace: %s', ns)
         try:
