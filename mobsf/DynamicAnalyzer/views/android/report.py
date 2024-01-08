@@ -139,8 +139,11 @@ def view_report(request, checksum, api=False):
         else:
             malware_score = None
 
+        # List of permissions used file
+        permissions_file = os.path.join(app_dir, 'perm_score.txt')
+
         # Permissions AI Scoring & Malware Type
-        permission_score = permissionScoring(settings.CSV_DIR, mobsf_frida_out_file)
+        permission_score = permissionScoring(settings.CSV_DIR, permissions_file)
         capabilities = permissionMalwareType(mobsf_frida_out_file)
 
         # Calculations
