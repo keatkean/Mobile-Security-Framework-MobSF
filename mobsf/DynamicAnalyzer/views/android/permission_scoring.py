@@ -3,10 +3,16 @@ from sklearn.linear_model import LogisticRegression
 from sklearn.metrics import accuracy_score
 import pandas as pd
 from sklearn.model_selection import cross_val_score
-import json
 
 def permissionScoring(csv_file: str, file_path: str):
     # Load data
+    f = open(file_path,"r")
+    content = f.read()
+    f.close()
+
+    # convert text to dataframe
+    data_dict = eval(content)
+    new_data = pd.DataFrame.from_dict(data_dict)
     df = pd.read_csv(csv_file)
 
     # ...
@@ -37,21 +43,8 @@ def permissionScoring(csv_file: str, file_path: str):
 
     model.fit(X_train, y_train)
 
-    # Getting permissions
-    logs = open(file_path, 'r').read().split('\n')
-    for line in logs:
-        if '[Permission.Score]' in line:
-            permissions = json.loads('{' + line[40:] + '}')
-
-            # Suppose new_data is your new, unseen sample formatted as a DataFrame or Series
-            # new_data = pd.DataFrame({feature1: [value1], feature2: [value2], ..., featureN: [valueN]})
-            new_data = pd.DataFrame(permissions)
-
-            # Predict the label for the new data
-            predictions = model.predict(new_data)
-            return {'prediction': predictions[0], 'accuracy': accuracy}
-
-    return {'prediction': 0, 'accuracy': 0}
+    predictions = model.predict(new_data)
+    return {'prediction': predictions[0], 'accuracy': accuracy}
 
 def permissionMalwareType(file_path: str):
     capabilities = []
