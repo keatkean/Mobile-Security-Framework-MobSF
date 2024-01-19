@@ -1,0 +1,26 @@
+{% extends "base/base_layout.html" %}
+ {% block sidebar_option %}
+      sidebar-collapse
+{% endblock %}
+{% block content %}
+<div class="content-wrapper">
+    <div class="content-header">
+    </div>
+    <div class="container-fluid">
+        <div class="row">
+            <div class="col-lg-12">
+                <div class="card">
+                    <div class="card-body">
+                        <h1>Automated Analysis</h1>
+                        <form method="post">
+                            {% csrf_token %}
+                            {{form}}
+                            <input type="submit" value="Start Scan">
+                        </form>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+  </div>
+{% endblock %}
