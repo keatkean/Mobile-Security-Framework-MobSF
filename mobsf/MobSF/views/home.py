@@ -16,7 +16,7 @@ from django.http import HttpResponse, HttpResponseRedirect
 from django.shortcuts import render
 from django.template.defaulttags import register
 
-from mobsf.MobSF.forms import FormUtil, UploadFileForm
+from mobsf.MobSF.forms import FormUtil, UploadFileForm, NameForm
 from mobsf.MobSF.utils import (
     api_key,
     is_dir_exists,
@@ -34,6 +34,7 @@ from mobsf.StaticAnalyzer.models import (
     StaticAnalyzerIOS,
     StaticAnalyzerWindows,
 )
+from scripts.mobsf_web import AutomatedAnalysis
 
 LINUX_PLATFORM = ['Darwin', 'Linux']
 HTTP_BAD_REQUEST = 400
@@ -188,6 +189,48 @@ def donate(request):
         'version': settings.MOBSF_VER,
     }
     template = 'general/donate.html'
+    return render(request, template, context)
+
+
+def automated(request):
+    """Automated Route."""
+    # if this is a POST request we need to process the form data
+    if request.method == "POST":
+        # create a form instance and populate it with data from the request:
+        form = NameForm(request.POST)
+        # check whether it's valid:
+        if form.is_valid():
+            # process the data in form.cleaned_data as required
+            type = form.cleaned_data['type']
+            file = form.cleaned_data['input_path']
+            androidactivities = form.cleaned_data['androidactivities']
+            server_url = request.build_absolute_uri('/')
+            apikey = api_key()
+            output = AutomatedAnalysis(type, server_url, androidactivities, file, apikey)
+            template = "general/automated_results.html"
+            context = {
+                'title': 'Automated Analysis Result',
+                'version': settings.MOBSF_VER,
+                'api_key': api_key(),
+                'type': type,
+                'input_path': file,
+                'androidactivities': androidactivities,
+                'server_url': server_url,
+                'output': output,
+            }
+            # redirect to a new URL:
+            return render(request, template, context)
+
+    # if a GET (or any other method) we'll create a blank form
+    else:
+        form = NameForm()
+
+    context = {
+        'title': 'Automated Analysis',
+        'version': settings.MOBSF_VER,
+        'form': form,
+    }
+    template = 'general/automated.html'
     return render(request, template, context)
 
 
