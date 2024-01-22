@@ -1,257 +1,325 @@
-# -*- coding: utf_8 -*-
-"""Dynamic Analyzer Reporting."""
+#!/usr/bin/env python
+# MobSF automated analysis scripts
+
+import argparse
+import ast
+import json
 import logging
-import ntpath
 import os
-import io
-import math
+import subprocess
+import sys
+import urllib.error
+import urllib.parse
+import urllib.request
+import requests
+import time
+from bs4 import BeautifulSoup
 
-from django.conf import settings
-from django.shortcuts import render
-from django.template.defaulttags import register
-from django.utils.html import escape
+# logging 
+logging.basicConfig(level=logging.INFO)
 
-import mobsf.MalwareAnalyzer.views.Trackers as Trackers
-from mobsf.DynamicAnalyzer.views.android.analysis import (
-    generate_download,
-    get_screenshots,
-    run_analysis,
-)
-from mobsf.DynamicAnalyzer.views.android.operations import (
-    get_package_name,
-)
-from mobsf.DynamicAnalyzer.views.android.tests_xposed import (
-    droidmon_api_analysis,
-)
-from mobsf.DynamicAnalyzer.views.android.tests_frida import (
-    apimon_analysis,
-    dependency_analysis,
-)
-from mobsf.MobSF.utils import (
-    is_file_exists,
-    is_md5,
-    is_path_traversal,
-    is_safe_path,
-    key,
-    print_n_send_error_response,
-    read_sqlite,
-)
-from mobsf.DynamicAnalyzer.views.android.scoring import (
-    scoring
-)
-from mobsf.DynamicAnalyzer.views.android.permission_scoring import (
-    permissionScoring,
-    permissionMalwareType
-)
+# relative file paths
+current_dir = os.path.dirname(os.path.abspath(__file__))
+output_folder = os.path.join(current_dir,"../mobsf/uploads/{}/dynamic_report.json")
+static_output_folder = os.path.join(current_dir,"../mobsf/uploads/{}/static_report.json")
+script_path = os.path.join(current_dir,"../mobsf/DynamicAnalyzer/tools/frida_scripts/others")
 
-
-logger = logging.getLogger(__name__)
-register.filter('key', key)
-
-# Added Frida Log Analysis Function
-def filter_frida_logs(app_dir, keywords):
-    """
-    Filter Frida logs for a list of keywords and save to a file for log analysis (remove noisy data).
-
-    param app_dir: Directory containing the log files.
-    param keywords: A dictionary or list of keywords to filter. If a dictionary, the values must be booleans.
-    """
-    frida_log_file = os.path.join(app_dir, 'mobsf_frida_out.txt')
-    log_analysis_file = os.path.join(app_dir, 'log_analysis.txt')
-
-    if not os.path.exists(frida_log_file):
-        logger.warning(f"Frida log file {frida_log_file} does not exist.")
-        return
-
-    written_lines = set()  # To store lines that have been written, prevents duplicate data from being displayed
-
+# check if server is up
+def is_server_up(url):
     try:
-        with open(frida_log_file, 'r') as frida_logs, open(log_analysis_file, 'w') as log_analysis:
-            for line in frida_logs:
-                if isinstance(keywords, dict):  # filtering and writing
-                    if any(keyword in line for keyword, enabled in keywords.items() if enabled):
-                        if line not in written_lines:
-                            log_analysis.write(line)
-                            written_lines.add(line)
-                elif isinstance(keywords, list):
-                    if any(keyword in line for keyword in keywords):
-                        if line not in written_lines:
-                            log_analysis.write(line)
-                            written_lines.add(line)
+        urllib.request.urlopen(url, timeout=5)
+        return True
+    except urllib.error.URLError:
+        pass
+    return False
+
+# file upload
+def file_upload(server_url, apikey, file):
+    # accepted file extensions
+    mimes = {
+        '.appx': 'application/octet-stream',
+        '.txt': 'text/plain',
+        '.png': 'image/png',
+        '.jpg': 'image/jpeg',
+        '.svg': 'image/svg+xml',
+        '.webp': 'image/webp',
+        '.zip': 'application/zip',
+        '.tar': 'application/x-tar',
+        '.apk': 'application/octet-stream',
+        '.ipa': 'application/octet-stream',
+        '.jar': 'application/java-archive',
+        '.aar': 'application/octet-stream',
+        '.so': 'application/octet-stream',
+        '.dylib': 'application/octet-stream',
+        '.a': 'application/octet-stream',
+        '.pcap': 'application/vnd.tcpdump.pcap',
+        '.xapk': 'application/octet-stream',
+    }
+    
+    filename = os.path.basename(file)
+    _, ext = os.path.splitext(file)
+    if ext in mimes:
+        files = {'file': (filename, open(file, 'rb'), mimes[ext], {'Expires': '0'})}
+        response = requests.post(server_url + 'api/v1/upload', files=files, headers={'AUTHORIZATION': apikey})
+        if response.status_code == 200 and 'hash' in response.json():
+            logging.info('[OK] Upload Complete - {}'.format(file))
+            upload_response_json=response.json()
+            upload_response=ast.literal_eval(response.text)
+            hashvalue = upload_response["hash"]
+            analyzer = upload_response["analyzer"]
+            static_analysis(server_url, apikey, file, upload_response_json)
+            return upload_response, hashvalue, analyzer
+        else:
+            logging.error('[Error] Performing Upload - {}'.format(file))
+
+# static analysis
+def static_analysis(server_url, apikey, file, upload_response_json):
+    logging.info('Running Static Analysis - {}'.format(file))
+    response = requests.post(
+    server_url + 'api/v1/scan',
+    data=upload_response_json,
+    headers={'AUTHORIZATION': apikey})
+    if response.status_code == 200:
+        logging.info('[OK] Static Analysis Complete - {}'.format(file))
+    else:
+        logging.error('[Error] Performing Static Analysis - {}'.format(file))
+
+# dynamic analysis
+def dynamic_analysis(server_url, apikey, hashvalue, androidactivities):
+    logging.info('Running Dynamic Analysis')
+    api_path = server_url + 'api/v1/dynamic/start_analysis'
+    header = "hash={}".format(hashvalue)
+    response = subprocess.Popen(['curl', '-X', 'POST', '--url', api_path, '--data', header, '-H', 'Authorization:'+apikey],
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    sys.stdout.flush()  
+    error = response.communicate()
+    if response.returncode != 0:
+        logging.error(f"[Error] Error starting dynamic analysis" + error.decode('utf-8'))
+
+    else:
+        logging.info("[OK] Dynamic analysis has successfully started")
+        if androidactivities == 1:
+            test_activities(hashvalue)
+        frida_instrumentation(hashvalue, "compiled.js")
+        #time.sleep() to allow frida instrumentation to run before analysis
+        time.sleep(20)
+        stop_analysis(hashvalue)
+        generate_report(hashvalue)
+
+# android activities
+def test_activities(hash):
+    api_path = server_url + 'api/v1/android/activity'
+    exported_header = 'hash={}&test=exported'.format(hash)
+    activity_header = 'hash={}&test=activity'.format(hash)
+    exported = subprocess.Popen(['curl','-X','POST','--url',api_path, '--data', exported_header, '-H', 'Authorization:'+apikey],
+                          stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    error_exported = exported.communicate()
+    if exported.returncode != 0:
+        logging.error("[Error] Error with testing exported activities" + error_exported.decode('utf-8'))
+    else:
+        logging.info("[OK] Successfully tested exported activties")
+        activity = subprocess.Popen(['curl','-X','POST','--url',api_path, '--data', activity_header, '-H', 'Authorization:'+apikey],
+                          stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+        error_activity = activity.communicate()
+        if activity.returncode != 0 :
+            logging.error("[Error] Error in testing for activties" + error_activity.decode('utf-8'))
+        else:
+            logging.info("[OK] Successfully tested for activities")
+
+# frida scripts
+def frida_instrumentation(hash, script_name):
+    api_path = server_url + 'api/v1/frida/instrument'
+    full_script_path = script_path + '/' + script_name
+    file = open(full_script_path, "r")
+    script_contents = file.read()
+    file.close()
+    parsed_script_contents = urllib.parse.quote_plus(script_contents)
+    header = "hash={}&default_hooks=api_monitor,ssl_pinning_bypass,root_bypass,debugger_check_bypass&auxiliary_hooks=enum_class,string_catch,string_compare,enum_methods,search_class,trace_class&class_name=java.io.File&class_search=ssl&class_trace=javax.net.ssl.TrustManager&frida_code={}".format(hash,parsed_script_contents)
+    response = subprocess.Popen(['curl', '-X', 'POST', '--url', api_path, '--data', header, '-H', 'Authorization:'+apikey],
+                                stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    error = response.communicate()
+    if response.returncode != 0:
+        logging.error("[Error] Frida script instrumentation unsuccessful.\nError: " + error.decode('utf-8'))
+    else:
+        logging.info("[OK] Frida script instrumentation successful")
+
+def stop_analysis(hash):
+    api_path = server_url + 'api/v1/dynamic/stop_analysis'
+    header = "hash={}".format(hash)
+    response = subprocess.Popen(['curl','-X','POST','--url',api_path, '--data', header, '-H', 'Authorization:'+ apikey],
+                          stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    error = response.communicate()
+    if response.returncode != 0:
+        logging.info("[Error] Stopping of dynamic analysis is unsuccessful" + error.decode('utf-8'))
+    else:
+        logging.info("[OK] Stopping of dynamic analysis is successful")
+
+# generate dynamic report
+def generate_report(hash):
+    api_path = server_url + 'api/v1/dynamic/report_json'
+    logging.info('Generating dynamic analysis report')
+    output_full_path = output_folder.format(hash)
+    header = "hash={}".format(hash)
+    response = subprocess.Popen(['curl','-X','POST','--url',api_path, '--data', header, '-H', 'Authorization:'+apikey, '--output', output_full_path],
+                          stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    error = response.communicate()
+    if response.returncode != 0:
+        logging.error("[Error] Dynamic JSON report generation is unsuccessful")
+    else:
+        logging.info("[OK] Dynamic JSON report generation is successful")
+
+# generate static report
+def generate_static_report(hash):
+    api_path = server_url + 'api/v1/report_json'
+    logging.info('Generating static analysis report')
+    static_output_full_path = static_output_folder.format(hash)
+    header = "hash={}".format(hash)
+    response = subprocess.Popen(['curl','-X','POST','--url',api_path, '--data', header, '-H', 'Authorization:'+apikey, '--output', static_output_full_path],
+                            stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    error = response.communicate()
+    if response.returncode != 0:
+        logging.error("[Error] Static JSON report generation is unsuccessful")
+    else:
+        logging.info("[OK] Static JSON report generation is successful")
+        permission_list(hash, static_output_full_path)
+
+# obtain list of permissions used from static report
+def permission_list(hash, static_output_full_path):
+    # get static report
+    f = open(static_output_full_path, 'r')
+    jsonString = f.read()
+    f.close()
+
+    # list of permissions used by the application
+    static_details = json.loads(jsonString)
+    permissions = (static_details['permissions'])
+    keys = list(permissions.keys())
+    for i in range(len(keys)):
+        cropped = keys[i].replace("'", "")
+        cropped = cropped.replace("android.permission.", "")
+        keys[i] = cropped
+
+    # list of all permissions
+    permission_path = os.path.join(current_dir,'../mobsf/all_permissions.txt')
+    f = open(permission_path, 'r')
+    allPermissions = list(f.read().split(', '))
+    f.close()
+
+    # file to store the input for AI scoring
+    perm_score = os.path.join(current_dir,'../mobsf/uploads/{}/perm_score.txt'.format(hash))
+
+    # initialise the file
+    f = open(perm_score,"w")
+    f.write("{")
+    f.close()
+
+    # compare the permissions used by the application against the full list of permissions
+    for i in allPermissions:
+        f = open(perm_score,'a')
+        if i in keys:
+            f.write('"'+i+'": [1],')
+        else:
+            f.write('"'+i+'": [0],')
+        f.close()
+
+    # remove the last comma
+    f = open(perm_score,'r+')
+    content = f.read()
+    f.seek(len(content)-1)
+    f.truncate()
+    f.close()
+
+    # end the dictionary in the file
+    f = open(perm_score,"a")
+    f.write("}")
+    f.close()
+
+# generate links to static, dynamic, and appsec scorecard
+def report_links(hash, upload_response, type, analyzer):
+    static_link = server_url + analyzer + '/?name=' + upload_response['file_name'] + '&checksum=' + hash + '&type=' + upload_response['scan_type']
+    print("Link for Static Report: {}".format(static_link))
+    if type == 'dynamic':
+        dynamic_link = server_url + 'dynamic_report/' + hash
+        print("Link for Dynamic Report: {}".format(dynamic_link))
+    scorecard_link = server_url + 'appsec_dashboard/' + hash + '/'
+    print("Link for Application Security Scorecard: {}\n".format(scorecard_link))
+
+
+if __name__ == '__main__':
+    parser = argparse.ArgumentParser()
+    parser.add_argument('-t', '--type', help='Analysis type. Value can be "static" or "dynamic" (Default: "static)', default='static')
+    parser.add_argument('-s', '--server', help='IP address and Port number of a running MobSF Server. (ex: 127.0.0.1:8000) [Required]')
+    parser.add_argument('-a', '--activities', help='Run android activities and capture screenshots.', nargs='?', const=1, default=0, type=int)
+    parser.add_argument('-f', '--file', help='Path to the mobile app binary/zipped source code file or folder containing such files [Required]')
+    args = parser.parse_args()
+
+    if args.file and args.server:
+        type = args.type
+        server = args.server
+        server_url = 'http://' + server + '/'
+        api_docs = BeautifulSoup(requests.get(server_url+'api_docs').text, 'html.parser')
+        apikey = api_docs.select('.lead > strong')[0].get_text()
+        androidactivities = args.activities
+        
+        
+        if not is_server_up(server_url):
+            print('MobSF REST API Server is not running at ' + server_url)
+            print('Exiting!')
+            exit(0)
+
+        if os.path.exists(args.file):
+            if os.path.isfile(args.file):
+                file = args.file
+                if type == 'static' or type == 'dynamic':
+                    output = file_upload(server_url, apikey, file)
+                    if output != None:
+                        upload_response = output[0]
+                        hashvalue = output[1]
+                        analyzer = output[2]
+                        generate_static_report(hashvalue)
+                        if upload_response['scan_type'] == 'apk' or upload_response['scan_type'] == 'xapk':     
+                            if type == 'dynamic':
+                                dynamic_analysis(server_url, apikey, hashvalue, androidactivities)
+                                report_links(hashvalue, upload_response, 'dynamic', analyzer)
+                            else:
+                                report_links(hashvalue, upload_response, 'static', analyzer)
+                        else:
+                            report_links(hashvalue, upload_response, 'static', analyzer)
+                    else:
+                        print('{} has an invalid file type for analysis'.format(file))
                 else:
-                    raise ValueError("Keywords must be either a dictionary or a list.")
-    except Exception as e:
-        logger.error(f"An error occurred while filtering Frida logs: {e}")
+                    print('Invalid scan type. (static/dynamic)')
+            elif os.path.isdir(args.file):
+                for filename in os.listdir(args.file):
+                    file = os.path.join(args.file, filename)
+                    if type == 'static' or type == 'dynamic':
+                        file_upload(server_url, apikey, file)
 
-
-
-def view_report(request, checksum, api=False):
-    """Dynamic Analysis Report Generation."""
-    logger.info('Dynamic Analysis Report Generation')
-    try:
-        droidmon = {}
-        apimon = {}
-        b64_strings = []
-        if not is_md5(checksum):
-            # We need this check since checksum is not validated
-            # in REST API
-            return print_n_send_error_response(
-                request,
-                'Invalid Parameters',
-                api)
-        package = get_package_name(checksum)
-        if not package:
-            return print_n_send_error_response(
-                request,
-                'Invalid Parameters',
-                api)
-        app_dir = os.path.join(settings.UPLD_DIR, checksum + '/')
-        download_dir = settings.DWD_DIR
-        tools_dir = settings.TOOLS_DIR
-        if not is_file_exists(os.path.join(app_dir, 'logcat.txt')):
-            msg = ('Dynamic Analysis report is not available '
-                   'for this app. Perform Dynamic Analysis '
-                   'and generate the report.')
-            return print_n_send_error_response(request, msg, api)
-        fd_log = os.path.join(app_dir, 'mobsf_frida_out.txt')
-        droidmon = droidmon_api_analysis(app_dir, package)
-        apimon, b64_strings = apimon_analysis(app_dir)
-        deps = dependency_analysis(package, app_dir)
-        analysis_result = run_analysis(app_dir, checksum, package)
-        domains = analysis_result['domains']
-        trk = Trackers.Trackers(app_dir, tools_dir)
-        trackers = trk.get_trackers_domains_or_deps(domains, deps)
-        generate_download(app_dir, checksum, download_dir, package)
-        images = get_screenshots(checksum, download_dir)
-        # Frida Log Analysis
-        filter_frida_logs(app_dir, settings.FRIDA_LOG_ANALYSIS_KEYWORDS)
-        log_analysis_file = os.path.join(app_dir, 'log_analysis.txt')  
-        if is_file_exists(log_analysis_file):
-            with open(log_analysis_file, 'r') as file:
-                log_analysis = file.read()
+                for filename in os.listdir(args.file):
+                    file = os.path.join(args.file, filename)
+                    if type == 'static' or type == 'dynamic':
+                        output = file_upload(server_url, apikey, file)
+                        if output != None:
+                            upload_response = output[0]
+                            hashvalue = output[1]
+                            analyzer = output[2]
+                            generate_static_report(hashvalue)
+                            if upload_response['scan_type'] == 'apk' or upload_response['scan_type'] == 'xapk':
+                                if type == 'dynamic':
+                                    dynamic_analysis(server_url, apikey, hashvalue, androidactivities)
+                                    report_links(hashvalue, upload_response, 'dynamic', analyzer)
+                                else:
+                                    report_links(hashvalue, upload_response, 'static', analyzer)
+                            else:
+                                report_links(hashvalue, upload_response, 'static', analyzer)
+                        else:
+                            print('{} has an invalid file type for analysis'.format(file))
+                    else:
+                        print('Invalid scan type. (static/dynamic)')
         else:
-            log_analysis = None
+            print('File or folder {} not found. Enter a valid file or folder'.format(args.file))
 
-        # Frida Log scoring system
-        mobsf_frida_out_file = os.path.join(app_dir, 'mobsf_frida_out.txt')
-        if is_file_exists(mobsf_frida_out_file):
-            malware_score = scoring(mobsf_frida_out_file)
-        else:
-            malware_score = None
+        
 
-        # List of permissions used file
-        permissions_file = os.path.join(app_dir, 'perm_score.txt')
-
-        # Permissions AI Scoring & Malware Type
-        permission_score = permissionScoring(settings.CSV_DIR, permissions_file)
-        capabilities = permissionMalwareType(mobsf_frida_out_file)
-
-        # Calculations
-        overall_score = (malware_score['malware_score'] + (permission_score['prediction'] * permission_score['accuracy'] * 100)) / (1 + permission_score['accuracy'])
-        dial_degree = ((overall_score * 3) - 150) % 360
-
-        context = {'hash': checksum,
-                   'emails': analysis_result['emails'],
-                   'urls': analysis_result['urls'],
-                   'domains': domains,
-                   'clipboard': analysis_result['clipboard'],
-                   'xml': analysis_result['xml'],
-                   'sqlite': analysis_result['sqlite'],
-                   'others': analysis_result['other_files'],
-                   'tls_tests': analysis_result['tls_tests'],
-                   'screenshots': images['screenshots'],
-                   'activity_tester': images['activities'],
-                   'exported_activity_tester': images['exported_activities'],
-                   'droidmon': droidmon,
-                   'apimon': apimon,
-                   'base64_strings': b64_strings,
-                   'trackers': trackers,
-                   'frida_logs': is_file_exists(fd_log),
-                   'runtime_dependencies': list(deps),
-                   'package': package,
-                   'version': settings.MOBSF_VER,
-                   'title': 'Dynamic Analysis',
-                   'log_analysis': log_analysis,
-                   'malware_score': malware_score['malware_score'],
-                   'critical_score': malware_score['critical_score'],
-                   'critical_score_max': malware_score['critical_score_max'],
-                   'suspicious_score': malware_score['suspicious_score'],
-                   'suspicious_score_max': malware_score['suspicious_score_max'],
-                   'permission_prediction': permission_score['prediction'],
-                   'permission_accuracy': permission_score['accuracy'],
-                   'capabilities': capabilities,
-                   'overall_score': round(overall_score, 2),
-                   'dial_degree': int(dial_degree)}
-        template = 'dynamic_analysis/android/dynamic_report.html'
-        if api:
-            return context
-        return render(request, template, context)
-    except Exception as exp:
-        logger.exception('Dynamic Analysis Report Generation')
-        err = 'Error Generating Dynamic Analysis Report. ' + str(exp)
-        return print_n_send_error_response(request, err, api)
-
-
-def view_file(request, api=False):
-    """View File."""
-    logger.info('Viewing File')
-    try:
-        typ = ''
-        rtyp = ''
-        dat = ''
-        sql_dump = {}
-        if api:
-            fil = request.POST['file']
-            md5_hash = request.POST['hash']
-            typ = request.POST['type']
-        else:
-            fil = request.GET['file']
-            md5_hash = request.GET['hash']
-            typ = request.GET['type']
-        if not is_md5(md5_hash):
-            return print_n_send_error_response(request,
-                                               'Invalid Parameters',
-                                               api)
-        src = os.path.join(
-            settings.UPLD_DIR,
-            md5_hash,
-            'DYNAMIC_DeviceData/')
-        sfile = os.path.join(src, fil)
-        if not is_safe_path(src, sfile) or is_path_traversal(fil):
-            err = 'Path Traversal Attack Detected'
-            return print_n_send_error_response(request, err, api)
-        with io.open(
-                sfile,  # lgtm [py/path-injection]
-                mode='r',
-                encoding='ISO-8859-1') as flip:
-            dat = flip.read()
-        if fil.endswith('.xml') and typ == 'xml':
-            rtyp = 'xml'
-        elif typ == 'db':
-            dat = None
-            sql_dump = read_sqlite(sfile)
-            rtyp = 'asciidoc'
-        elif typ == 'others':
-            rtyp = 'asciidoc'
-        else:
-            err = 'File type not supported'
-            return print_n_send_error_response(request, err, api)
-        fil = escape(ntpath.basename(fil))
-        context = {
-            'title': fil,
-            'file': fil,
-            'data': dat,
-            'sqlite': sql_dump,
-            'type': rtyp,
-            'version': settings.MOBSF_VER,
-        }
-        template = 'general/view.html'
-        if api:
-            return context
-        return render(request, template, context)
-    except Exception:
-        logger.exception('Viewing File')
-        return print_n_send_error_response(
-            request,
-            'Error Viewing File',
-            api)
+    else:
+        parser.print_help()
