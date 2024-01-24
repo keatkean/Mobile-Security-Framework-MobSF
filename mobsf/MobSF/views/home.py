@@ -133,14 +133,11 @@ class Upload(object):
         content_type = self.file.content_type
         file_name = self.file.name
         logger.info('MIME Type: %s FILE: %s', content_type, file_name)
-        if self.file_type.is_zip() and is_encrypted_zip(self.file):
-            if request.POST.get('password') != None:
-                logger.info('Password for encrypted zip is: %s', request.POST.get('password'))
-                return scanning.scan_encrypted_zip()
-            else:
-                return {'error': 'No password provided'}, HTTP_BAD_REQUEST
+        if self.file_type.is_zip():
+            return scanning.scan_encrypted_zip()
         else:
             return self.upload_scan(scanning)
+
 
     def upload_scan(self, scanning):
         if self.file_type.is_apk():
@@ -153,8 +150,6 @@ class Upload(object):
             return scanning.scan_jar()
         elif self.file_type.is_aar():
             return scanning.scan_aar()
-        elif self.file_type.is_zip():
-            return scanning.scan_zip()
         elif self.file_type.is_ipa():
             return scanning.scan_ipa()
         elif self.file_type.is_appx():
@@ -205,6 +200,7 @@ def automated(request):
             file = form.cleaned_data['input_path']
             androidactivities = form.cleaned_data['androidactivities']
             server_url = request.build_absolute_uri('/')
+            print(server_url)
             apikey = api_key()
             output = AutomatedAnalysis(type, server_url, androidactivities, file, apikey)
             template = "general/automated_results.html"
