@@ -114,7 +114,7 @@
       <script>
             let warning = "This is a demo MobSF instance. Anything uploaded here will be publicly available. Do you want to continue?";
             // Result View
-            function load_result(url){
+            function load_result(url, single=true){
                 hide_loader();
                 var xhr = new XMLHttpRequest()
                 xhr.open('GET', url, true)
@@ -125,7 +125,12 @@
                     });
                 })
                 xhr.addEventListener("load", function (evt) {
-                    window.location.href = window.location.href + url;
+                    if (single==true){
+                        window.location.href = window.location.href + url;
+                    } else {
+                        window.location.href = window.location.href + 'recent_scans/';
+                    }
+                    
                 }, false);
                 xhr.send();
             }
@@ -202,9 +207,17 @@
                             i = 1;
                         }
                     }, 2000);
-                    var url = json.analyzer + '/';
-                    if (json.hash){
-                        url += '?name=' + encodeURIComponent(json.file_name) + '&checksum=' + json.hash + '&type=' + json.scan_type
+                    if (json.analyzer === undefined && json.hash === undefined) {
+                        for (let i = 0; i < json.results.length; i++){
+                            url = json.results[i].analyzer + '/?name=' + encodeURIComponent(json.results[i].file_name) + '&checksum=' + json.results[i].hash + '&type=' + json.results[i].scan_type;
+                            load_result(url, false);
+                        }
+                    } else {
+                        var url = json.analyzer + '/';
+                        if (json.hash){
+                            url += '?name=' + encodeURIComponent(json.file_name) + '&checksum=' + json.hash + '&type=' + json.scan_type
+                        }
+
                     }
                     load_result(url);
                 }
