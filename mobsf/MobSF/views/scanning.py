@@ -190,6 +190,7 @@ class Scanning(object):
 
     def scan_generic(self, file_path, file_name, extension, scan_type, message, analyzer=None):
         """Generic file."""
+        file_name = file_name.rsplit("/", 1)[-1]
         logger.info('Processing File Name: %s', file_name)
         md5 = handle_uploaded_file(file_path, extension)
         self.data['hash'] = md5
@@ -262,24 +263,24 @@ class Scanning(object):
             error_response = {'error': error_message}
             return JsonResponse(error_response, status=HTTP_BAD_REQUEST)
         
-        logger.info('File object is: %s', self.file)
+        # logger.info('File object is: %s', self.file)
 
-        # Scan as apk file
-        md5sum = hashlib.md5(open(f'{temp_dir}{extracted_items[0]}','rb').read()).hexdigest()
-        logger.info('File md5 hash is: %s', md5sum)
-        anal_dir = os.path.join(settings.UPLD_DIR, md5sum + '/')
-        if not os.path.exists(anal_dir):
-            os.makedirs(anal_dir)
-        with open(f'{anal_dir}{md5sum}.apk', 'wb+') as destination:
-            logger.info(f'Writing to {anal_dir}{md5sum}.apk')
-            with open(f'{temp_dir}{extracted_items[0]}', 'rb') as file_obj:
-                for chunk in iter(lambda: file_obj.read(8192), b''):
-                    destination.write(chunk)
-        self.data['hash'] = md5sum
-        self.data['scan_type'] = 'apk'
-        add_to_recent_scan(self.data)
-        logger.info('Performing Static Analysis of Android APK')
-        return self.data
+        # # Scan as apk file
+        # md5sum = hashlib.md5(open(f'{temp_dir}{extracted_items[0]}','rb').read()).hexdigest()
+        # logger.info('File md5 hash is: %s', md5sum)
+        # anal_dir = os.path.join(settings.UPLD_DIR, md5sum + '/')
+        # if not os.path.exists(anal_dir):
+        #     os.makedirs(anal_dir)
+        # with open(f'{anal_dir}{md5sum}.apk', 'wb+') as destination:
+        #     logger.info(f'Writing to {anal_dir}{md5sum}.apk')
+        #     with open(f'{temp_dir}{extracted_items[0]}', 'rb') as file_obj:
+        #         for chunk in iter(lambda: file_obj.read(8192), b''):
+        #             destination.write(chunk)
+        # self.data['hash'] = md5sum
+        # self.data['scan_type'] = 'apk'
+        # add_to_recent_scan(self.data)
+        # logger.info('Performing Static Analysis of Android APK')
+        # return self.data
 
         pro_type, valid = valid_source_code(temp_dir)
         if valid:
