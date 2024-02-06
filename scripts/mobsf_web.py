@@ -22,7 +22,7 @@ output_folder = os.path.join(current_dir,"../mobsf/uploads/{}/dynamic_report.jso
 static_output_folder = os.path.join(current_dir,"../mobsf/uploads/{}/static_report.json")
 script_path = os.path.join(current_dir,"../mobsf/DynamicAnalyzer/tools/frida_scripts/others")
 
-output_logs = []
+
 
 # check if server is up
 def is_server_up(url):
@@ -34,7 +34,7 @@ def is_server_up(url):
     return False
 
 # file upload
-def file_upload(server_url, apikey, file, type, androidactivities):
+def file_upload(server_url, apikey, file, type, androidactivities, output_logs):
     # accepted file extensions
     mimes = {
         '.apk': 'application/octet-stream',
@@ -66,7 +66,7 @@ def file_upload(server_url, apikey, file, type, androidactivities):
                 analyzer = upload_response["analyzer"]
                 static_analysis(server_url, apikey, file, upload_response)
                 generate_static_report(server_url, apikey, hashvalue)
-                DetermineDynamicAnalysis(upload_response, hashvalue, analyzer, type, server_url, apikey, androidactivities, output_logs)
+                DetermineDynamicAnalysis(upload_response, hashvalue, analyzer, type, server_url, apikey, androidactivities, output_logs, useractivities)
             return 'ZipAnalysis'
         else:
             logging.error('[Error] Performing Upload - {}'.format(file))
@@ -84,7 +84,10 @@ def static_analysis(server_url, apikey, file, upload_response_json):
         logging.error('[Error] Performing Static Analysis - {}'.format(file))
 
 # dynamic analysis
-def dynamic_analysis(server_url, apikey, hashvalue, androidactivities):
+def dynamic_analysis(server_url, apikey, hashvalue, androidactivities, useractivities):
+    os.system("adb -s emulator-5554 emu kill")
+    subprocess.Popen(['emulator','-wipe-data','-avd','Pixel_XL_API_28', '-writable-system', '-no-snapshot'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    time.sleep(15)
     logging.info('Running Dynamic Analysis')
     api_path = server_url + 'api/v1/dynamic/start_analysis'
     header = "hash={}".format(hashvalue)
@@ -97,8 +100,10 @@ def dynamic_analysis(server_url, apikey, hashvalue, androidactivities):
 
     else:
         logging.info("[OK] Dynamic analysis has successfully started")
-        if androidactivities == 1:
+        if androidactivities == '1':
             test_activities(server_url, apikey, hashvalue)
+        if useractivities == '1':
+            automated_user_activities()
         frida_instrumentation(server_url, apikey, hashvalue, "compiled.js")
         #time.sleep() to allow frida instrumentation to run before analysis
         time.sleep(20)
@@ -251,10 +256,10 @@ def report_links(server_url, hash, upload_response, type, output_logs, analyzer)
     output_logs.append("\n")
 
 
-def DetermineDynamicAnalysis(upload_response, hashvalue, analyzer, type, server_url, apikey, androidactivities, output_logs):
+def DetermineDynamicAnalysis(upload_response, hashvalue, analyzer, type, server_url, apikey, androidactivities, output_logs, useractivities):
     if upload_response['scan_type'] == 'apk' or upload_response['scan_type'] == 'xapk':
         if type == 'dynamic':
-            dynamic_analysis(server_url, apikey, hashvalue, androidactivities)
+            dynamic_analysis(server_url, apikey, hashvalue, androidactivities, useractivities)
             report_links(server_url, hashvalue, upload_response, 'dynamic', output_logs, analyzer)
         else:
             report_links(server_url, hashvalue, upload_response, 'static', output_logs, analyzer)
@@ -262,13 +267,19 @@ def DetermineDynamicAnalysis(upload_response, hashvalue, analyzer, type, server_
         report_links(server_url, hashvalue, upload_response, 'static', output_logs, analyzer)
 
 
-def AutomatedAnalysis(type, server_url, androidactivities, filepath, apikey):
+def automated_user_activities():
+    automated_user_activities_script = os.path.join(current_dir,'automated_activities.sh')
+    os.system(automated_user_activities_script)
+
+
+def AutomatedAnalysis(type, server_url, androidactivities, filepath, apikey, useractivities):
+    output_logs = []
     if os.path.exists(filepath):
         if os.path.isfile(filepath):
             file = filepath
             output_logs.append("Analysis results - {}".format(file))
             if type == 'static' or type == 'dynamic':
-                output = file_upload(server_url, apikey, file, type, androidactivities)
+                output = file_upload(server_url, apikey, file, type, androidactivities, output_logs)
                 if output == 'ZipAnalysis':
                     output_logs.append("Scan completed, refer to recent scans.")
                     output_logs.append("\n")
@@ -277,7 +288,7 @@ def AutomatedAnalysis(type, server_url, androidactivities, filepath, apikey):
                     hashvalue = output[1]
                     analyzer = output[2]
                     generate_static_report(server_url, apikey, hashvalue)
-                    DetermineDynamicAnalysis(upload_response, hashvalue, analyzer, type, server_url, apikey, androidactivities, output_logs)
+                    DetermineDynamicAnalysis(upload_response, hashvalue, analyzer, type, server_url, apikey, androidactivities, output_logs, useractivities)
                 else:
                     print('{} has an invalid file type for analysis'.format(file))
                     output_logs.append('{} has an invalid file type for analysis'.format(file))
@@ -288,19 +299,19 @@ def AutomatedAnalysis(type, server_url, androidactivities, filepath, apikey):
             for filename in os.listdir(filepath):
                 file = os.path.join(filepath, filename)
                 if type == 'static' or type == 'dynamic':
-                    file_upload(server_url, apikey, file, type, androidactivities)
+                    file_upload(server_url, apikey, file, type, androidactivities, output_logs)
 
             for filename in os.listdir(filepath):
                 file = os.path.join(filepath, filename)
                 output_logs.append("Analysis results - {}".format(file))
                 if type == 'static' or type == 'dynamic':
-                    output = file_upload(server_url, apikey, file, type, androidactivities)
+                    output = file_upload(server_url, apikey, file, type, androidactivities, output_logs)
                     if output != None:
                         upload_response = output[0]
                         hashvalue = output[1]
                         analyzer = output[2]
                         generate_static_report(server_url, apikey, hashvalue)
-                        DetermineDynamicAnalysis(upload_response, hashvalue, analyzer, type, server_url, apikey, androidactivities, output_logs)
+                        DetermineDynamicAnalysis(upload_response, hashvalue, analyzer, type, server_url, apikey, androidactivities, output_logs, useractivities)
                     else:
                         print('{} has an invalid file type for analysis'.format(file))
                         output_logs.append('{} has an invalid file type for analysis'.format(file))
