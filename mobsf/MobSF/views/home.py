@@ -199,10 +199,10 @@ def automated(request):
             type = form.cleaned_data['type']
             file = form.cleaned_data['input_path']
             androidactivities = form.cleaned_data['androidactivities']
+            useractivities = form.cleaned_data['useractivities']
             server_url = request.build_absolute_uri('/')
-            print(server_url)
             apikey = api_key()
-            output = AutomatedAnalysis(type, server_url, androidactivities, file, apikey)
+            output = AutomatedAnalysis(type, server_url, androidactivities, file, apikey, useractivities)
             template = "general/automated_results.html"
             context = {
                 'title': 'Automated Analysis Result',
