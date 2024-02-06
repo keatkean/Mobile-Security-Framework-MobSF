@@ -66,7 +66,7 @@ def file_upload(server_url, apikey, file):
                 analyzer = upload_response["analyzer"]
                 static_analysis(server_url, apikey, file, upload_response)
                 generate_static_report(server_url, apikey, hashvalue)
-                DetermineDynamicAnalysis(upload_response, hashvalue, analyzer, type, server_url, apikey, androidactivities)
+                DetermineDynamicAnalysis(upload_response, hashvalue, analyzer, type, server_url, apikey, androidactivities, useractivities)
             return 'ZipAnalysis' 
         else:
             logging.error('[Error] Performing Upload - {}'.format(file))
@@ -84,7 +84,10 @@ def static_analysis(server_url, apikey, file, upload_response_json):
         logging.error('[Error] Performing Static Analysis - {}'.format(file))
 
 # dynamic analysis
-def dynamic_analysis(server_url, apikey, hashvalue, androidactivities):
+def dynamic_analysis(server_url, apikey, hashvalue, androidactivities, useractivities):
+    os.system("adb -s emulator-5554 emu kill")
+    subprocess.Popen(['emulator','-wipe-data','-avd','Pixel_XL_API_28', '-writable-system', '-no-snapshot'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+    time.sleep(15)
     logging.info('Running Dynamic Analysis')
     api_path = server_url + 'api/v1/dynamic/start_analysis'
     header = "hash={}".format(hashvalue)
@@ -97,8 +100,10 @@ def dynamic_analysis(server_url, apikey, hashvalue, androidactivities):
 
     else:
         logging.info("[OK] Dynamic analysis has successfully started")
-        if androidactivities == 1:
+        if androidactivities == '1':
             test_activities(hashvalue)
+        if useractivities == '1':
+            automated_user_activities()
         frida_instrumentation(hashvalue, "compiled.js")
         #time.sleep() to allow frida instrumentation to run before analysis
         time.sleep(20)
@@ -247,15 +252,20 @@ def report_links(hash, upload_response, type, analyzer):
     print("Link for Application Security Scorecard: {}\n".format(scorecard_link))
 
 
-def DetermineDynamicAnalysis(upload_response, hashvalue, analyzer, type, server_url, apikey, androidactivities):
+def DetermineDynamicAnalysis(upload_response, hashvalue, analyzer, type, server_url, apikey, androidactivities, useractivities):
     if upload_response['scan_type'] == 'apk' or upload_response['scan_type'] == 'xapk':
         if type == 'dynamic':
-            dynamic_analysis(server_url, apikey, hashvalue, androidactivities)
+            dynamic_analysis(server_url, apikey, hashvalue, androidactivities, useractivities)
             report_links(server_url, hashvalue, upload_response, 'dynamic', analyzer)
         else:
             report_links(server_url, hashvalue, upload_response, 'static', analyzer)
     else:
         report_links(server_url, hashvalue, upload_response, 'static', analyzer)
+
+
+def automated_user_activities():
+    automated_user_activities_script = os.path.join(current_dir,'automated_activities.sh')
+    os.system(automated_user_activities_script)
 
 
 if __name__ == '__main__':
@@ -264,6 +274,7 @@ if __name__ == '__main__':
     parser.add_argument('-s', '--server', help='IP address and Port number of a running MobSF Server. (ex: 127.0.0.1:8000) [Required]')
     parser.add_argument('-a', '--activities', help='Run android activities and capture screenshots.', nargs='?', const=1, default=0, type=int)
     parser.add_argument('-f', '--file', help='Path to the mobile app binary/zipped source code file or folder containing such files [Required]')
+    parser.add_argument('-u', '--useractivities', help='Run user activities on android phone.', nargs='?', const=1, default=0, type=int)
     args = parser.parse_args()
 
     if args.file and args.server:
@@ -273,6 +284,7 @@ if __name__ == '__main__':
         api_docs = BeautifulSoup(requests.get(server_url+'api_docs').text, 'html.parser')
         apikey = api_docs.select('.lead > strong')[0].get_text()
         androidactivities = args.activities
+        useractivities = args.useractivities
         
         
         if not is_server_up(server_url):
@@ -290,7 +302,7 @@ if __name__ == '__main__':
                         hashvalue = output[1]
                         analyzer = output[2]
                         generate_static_report(hashvalue)
-                        DetermineDynamicAnalysis(upload_response, hashvalue, analyzer, type, server_url, apikey, androidactivities)
+                        DetermineDynamicAnalysis(upload_response, hashvalue, analyzer, type, server_url, apikey, androidactivities, useractivities)
                     else:
                         print('{} has an invalid file type for analysis'.format(file))
                 else:
@@ -310,7 +322,7 @@ if __name__ == '__main__':
                             hashvalue = output[1]
                             analyzer = output[2]
                             generate_static_report(hashvalue)
-                            DetermineDynamicAnalysis(upload_response, hashvalue, analyzer, type, server_url, apikey, androidactivities)
+                            DetermineDynamicAnalysis(upload_response, hashvalue, analyzer, type, server_url, apikey, androidactivities, useractivities)
                             print('{} has an invalid file type for analysis'.format(file))
                     else:
                         print('Invalid scan type. (static/dynamic)')
