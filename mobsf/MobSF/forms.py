@@ -41,3 +41,5 @@ class NameForm(forms.Form):
     input_path = forms.CharField(label="File or folder path", max_length=10000)
     activities_CHOICES = {0: "Don't run android activites", 1: "Run android activities"}
     androidactivities = forms.ChoiceField(label='Android Activities', choices=activities_CHOICES)
+    useractivities_CHOICES = {0: "Don't run user activites", 1: "Run user activities"}
+    useractivities = forms.ChoiceField(label='User Activities', choices=useractivities_CHOICES)
