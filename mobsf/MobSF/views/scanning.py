@@ -147,3 +147,180 @@ class Scanning(object):
         """Java JAR file."""
         md5 = handle_uploaded_file(self.file, '.jar')
         self.data['hash'] = md5
+        self.data['scan_type'] = 'jar'
+        add_to_recent_scan(self.data)
+        logger.info('Performing Static Analysis of Java JAR')
+        return self.data
+
+    def scan_aar(self):
+        """Android AAR file."""
+        md5 = handle_uploaded_file(self.file, '.aar')
+        self.data['hash'] = md5
+        self.data['scan_type'] = 'aar'
+        add_to_recent_scan(self.data)
+        logger.info('Performing Static Analysis of Android AAR')
+        return self.data
+
+    def scan_zip(self):
+        """Android /iOS Zipped Source."""
+        md5 = handle_uploaded_file(self.file, '.zip')
+        self.data['hash'] = md5
+        self.data['scan_type'] = 'zip'
+        add_to_recent_scan(self.data)
+        logger.info('Performing Static Analysis of Android/iOS Source Code')
+        return self.data
+
+    def scan_ipa(self):
+        """IOS Binary."""
+        md5 = handle_uploaded_file(self.file, '.ipa')
+        self.data['hash'] = md5
+        self.data['scan_type'] = 'ipa'
+        self.data['analyzer'] = 'static_analyzer_ios'
+        add_to_recent_scan(self.data)
+        logger.info('Performing Static Analysis of iOS IPA')
+        return self.data
+
+    def scan_appx(self):
+        """Windows appx."""
+        md5 = handle_uploaded_file(self.file, '.appx')
+        self.data['hash'] = md5
+        self.data['scan_type'] = 'appx'
+        self.data['analyzer'] = 'static_analyzer_windows'
+        add_to_recent_scan(self.data)
+        logger.info('Performing Static Analysis of Windows APP')
+        return self.data
+
+    def scan_generic(self, file_path, file_name, extension, scan_type, message, analyzer=None):
+        """Generic file."""
+        file_name = file_name.rsplit("/", 1)[-1]
+        logger.info('Processing File Name: %s', file_name)
+        md5 = handle_uploaded_file(file_path, extension)
+        self.data['hash'] = md5
+        self.data['scan_type'] = scan_type
+        self.data['file_name'] = file_name
+        if analyzer:
+            self.data['analyzer'] = analyzer
+        add_to_recent_scan(self.data)
+        logger.info(message + '\n')
+        return self.data
+
+    def distribute_file_to_analyzers(self, working_directory, file_name):
+        full_file_path = os.path.join(working_directory, file_name)
+        if not os.path.isdir(full_file_path) and os.path.exists(full_file_path):
+            if is_zip_magic_local_file(full_file_path) and full_file_path.lower().endswith(allowed_file_types):
+                logger.info('File format extracted from the ZIP is Supported!')
+                if full_file_path.lower().endswith('.apk'):
+                    return self.scan_generic(full_file_path, file_name, '.apk', 'apk',
+                                             'Performing Static Analysis of Android APK', analyzer=None), False
+                elif full_file_path.lower().endswith('.apks'):
+                    return self.scan_generic(full_file_path, file_name, '.apk', 'apks',
+                                             'Performing Static Analysis of Android Split APK', analyzer=None), False
+                elif full_file_path.lower().endswith('.xapk'):
+                    return self.scan_generic(full_file_path, file_name, '.xapk', 'xapk',
+                                             'Performing Static Analysis of Android XAPK base APK',
+                                             analyzer=None), False
+                elif full_file_path.lower().endswith('.zip'):
+                    return self.scan_generic(full_file_path, file_name, '.zip', 'zip',
+                                             'Performing Static Analysis of Android/iOS Source Code',
+                                             analyzer=None), False
+                elif full_file_path.lower().endswith('.ipa'):
+                    return self.scan_generic(full_file_path, file_name, '.ipa', 'ipa',
+                                             'Performing Static Analysis of iOS IPA',
+                                             analyzer='static_analyzer_ios'), False
+                elif full_file_path.lower().endswith('.appx'):
+                    return self.scan_generic(full_file_path, file_name, '.appx', 'appx',
+                                             'Performing Static Analysis of Windows APP',
+                                             analyzer='static_analyzer_windows'), False
+                elif full_file_path.lower().endswith('.jar'):
+                    return self.scan_generic(full_file_path, file_name, '.jar', 'jar',
+                                             'Performing Static Analysis of Java JAR', analyzer=None), False
+                elif full_file_path.lower().endswith('.aar'):
+                    return self.scan_generic(full_file_path, file_name, '.aar', 'aar',
+                                             'Performing Static Analysis of Android AAR', analyzer=None), False
+
+            else:
+                error_message = "Error: File format extracted from the ZIP is not Supported!"
+                error_response = {'file': file_name, 'error': error_message}
+                return error_response, True
+        else:
+            if os.path.isdir(full_file_path):
+                error_message = "Error: File is a directory. Will skip processing..."
+                error_response = {'Directory': full_file_path, 'error': error_message}
+                return error_response, True
+            else:
+                error_message = "Error: File does not exist."
+                error_response = {'fullFilePath': full_file_path, 'file': file_name, 'error': error_message}
+                return error_response, True
+
+    def scan_encrypted_zip(self):
+        md5 = handle_uploaded_file(self.file, '.zip', istemp=True)
+        temp_dir = os.path.join(settings.TEMP_DIR, md5 + '/')
+        file = os.path.join(temp_dir, md5 + '.zip')
+        extracted_items = unzip_file_directory(file, temp_dir, self.zip_password)
+        logger.info('Extracted items are: %s', extracted_items)
+        results = []  # store data
+        errors = []  # store errors
+        if len(extracted_items) == 0:
+            error_message = "Error: No files/folders extracted from the ZIP."
+            error_response = {'error': error_message}
+            return JsonResponse(error_response, status=HTTP_BAD_REQUEST)
+        
+        # logger.info('File object is: %s', self.file)
+
+        # # Scan as apk file
+        # md5sum = hashlib.md5(open(f'{temp_dir}{extracted_items[0]}','rb').read()).hexdigest()
+        # logger.info('File md5 hash is: %s', md5sum)
+        # anal_dir = os.path.join(settings.UPLD_DIR, md5sum + '/')
+        # if not os.path.exists(anal_dir):
+        #     os.makedirs(anal_dir)
+        # with open(f'{anal_dir}{md5sum}.apk', 'wb+') as destination:
+        #     logger.info(f'Writing to {anal_dir}{md5sum}.apk')
+        #     with open(f'{temp_dir}{extracted_items[0]}', 'rb') as file_obj:
+        #         for chunk in iter(lambda: file_obj.read(8192), b''):
+        #             destination.write(chunk)
+        # self.data['hash'] = md5sum
+        # self.data['scan_type'] = 'apk'
+        # add_to_recent_scan(self.data)
+        # logger.info('Performing Static Analysis of Android APK')
+        # return self.data
+
+        pro_type, valid = valid_source_code(temp_dir)
+        if valid:
+            md5 = handle_uploaded_file(self.file, '.zip')
+            self.data['hash'] = md5
+            self.data['scan_type'] = 'zip'
+            add_to_recent_scan(self.data)
+            logger.info('Performing Static Analysis of Android/iOS Source Code')
+            return self.data
+        else:
+            for item in extracted_items:
+                item_path = os.path.join(temp_dir, item)
+                if os.path.isdir(item_path):
+                    pro_type, valid = valid_source_code(item_path + '/')
+                    if valid:
+                        zip_file_name = os.path.join(temp_dir, item + '.zip')
+                        if zip_directory(temp_dir, zip_file_name):
+                            results.append(self.scan_generic(zip_file_name, item, '.zip', 'zip',
+                                                             'Performing Static Analysis of Android/iOS Source Code',
+                                                             analyzer=None))
+                        else:
+                            # Try to parse as apk file
+                            error_message = "Error: Zipping error"
+                            error_response = {'directory': item, 'error': error_message}
+                            errors.append(error_response)
+                    # else:
+                    #     result, error = self.distribute_file_to_analyzers(item_path + '/', item)
+                    #     if error:
+                    #         errors.append(result)
+                    #     else:
+                    #         results.append(result)
+                else:
+                    result, error = self.distribute_file_to_analyzers(temp_dir, item)
+                    if error:
+                        errors.append(result)
+                    else:
+                        results.append(result.copy())
+                    # logger.info('Results: %s', results)
+            response_data = {'results': results, 'errors': errors}
+            # logger.info('Response Data: %s', response_data)
+            return response_data
