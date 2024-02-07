@@ -5,6 +5,7 @@ import logging
 import os
 import subprocess
 import tempfile
+import json
 from pathlib import Path
 from xml.dom import minidom
 
@@ -157,6 +158,90 @@ def manifest_data(mfxml):
         android_permission_tags = ('com.google.', 'android.', 'com.google.')
         for permission in permissions:
             perm.append(permission.getAttribute('android:name'))
+        # Calculating Payload Potential
+        DMO_E = False
+        DMO_N_E = False
+        Spyware_E = False
+        Spyware_N_E = False
+        UCC = False
+        PayPotential = 0
+        for PayloadP in perm:
+            if str(PayloadP) == 'android.permission.WRITE_SETTINGS' or str(PayloadP) == 'android.permission.MANAGE_ACCOUNTS':
+                DMO_E = True
+            if str(PayloadP) == 'android.permission.WRITE_EXTERNAL_STORAGE' or str(PayloadP) == 'android.permission.MOUNT_UNMOUNT_FILESYSTEMS' or str(PayloadP) == 'android.permission.WRITE_CONTACTS':
+                DMO_N_E = True
+            if str(PayloadP) == 'android.permission.READ_LOGS' or str(PayloadP) == 'android.permission.ACCESS_FINE_LOCATION' or str(PayloadP) == 'android.permission.CAMERA' or str(PayloadP) == 'android.permission.RECORD_AUDIO' or str(PayloadP) == 'android.permission.RECORD_VIDEO':
+                Spyware_E = True
+            if str(PayloadP) == 'android.permission.READ_EXTERNAL_STORAGE' or str(PayloadP) == 'android.permission.GET_TASKS' or str(PayloadP) == 'android.permission.ACCESS_COURSE_LOCATION' or str(PayloadP) == 'android.permission.GET_ACCOUNTS' or str(PayloadP) == 'android.permission.GET_TASKS' or str(PayloadP) == 'android.permission.READ_CONTACTS' or str(PayloadP) == 'android.permission.READ_SMS':
+                Spyware_N_E = True
+            if str(PayloadP) == 'android.permission.WRITE_SMS' or str(PayloadP) == 'android.permission.ANSWER_PHONE_CALLS' or str(PayloadP) == 'android.permission.CALL_PHONE' or str(PayloadP) == 'android.permission.PROCESS_OUTGOING_CALLS' or str(PayloadP) == 'android.permission.RECEIVE_MMS' or str(PayloadP) == 'android.permission.RECEIVE_SMS':
+                UCC = True
+        if DMO_E == True and Spyware_E == True and UCC == True:
+            PayPotential = 10
+        elif DMO_E == True and UCC == True:
+            PayPotential = 9
+        elif DMO_E == True:
+            PayPotential = 8
+        elif DMO_N_E == True and UCC == True:
+            PayPotential = 7
+        elif UCC == True:
+            PayPotential = 6
+        elif DMO_N_E == True and Spyware_E == True:
+            PayPotential = 5
+        elif DMO_N_E == True and Spyware_N_E == True:
+            PayPotential = 4
+        elif DMO_N_E == True:
+            PayPotential = 3
+        elif Spyware_E == True:
+            PayPotential = 2
+        elif Spyware_N_E == True:
+            PayPotential = 1
+        # Calculating Proliferation Potential
+        NFC = False
+        Install_P = False
+        ProliferationPotential = 1
+        for ProliferationP in perm:
+            if str(ProliferationP) == 'android.permission.REQUEST_INSTALL_PACKAGE':
+                Install_P = True
+            if str(ProliferationP) == 'android.permission.NFC':
+                NFC = True
+        if NFC == True and Install_P == True:
+            ProliferationPotential = 4
+        elif NFC == True:
+            ProliferationPotential = 3
+        elif Install_P == True:
+            ProliferationPotential = 2
+        # Calculating Hostility Potential
+        Destructive = False
+        Disruptive = False
+        HostilityPotential = 1
+        for HostilityP in perm:
+            if str(HostilityP) == 'android.permission.WRITE_SETTINGS' or str(HostilityP) == 'android.permission.MANAGE_ACCOUNTS' or str(HostilityP) == 'android.permission.WRITE_EXTERNAL STORAGE' or str(HostilityP) == 'android.permission.MOUNT_UNMOUNT_FILESYSTEMS' or str(HostilityP) == 'android.permission.WRITE_CONTAACTS':
+                Destructive = True
+            if str(HostilityP) == 'android.permission.SYSTEM_ALERT_WINDOW' or str(HostilityP) == 'android.permission.SET_PROCESS_LIMIT':
+                Disruptive = True
+        if Destructive == True and Disruptive == True:
+            HostilityPotential = 4
+        elif Destructive == True:
+            HostilityPotential = 3
+        elif Disruptive == True:
+            HostilityPotential = 2
+        # Calculating Score
+        MalwareScore = (((PayPotential/10)*6)+((ProliferationPotential/4)*3)+((HostilityPotential/4)*1))*10
+        from mobsf.MobSF.views.scanning import (
+            apk_hash
+        )
+        # relative file paths
+        current_dir = os.path.dirname(os.path.abspath(__file__))
+        output_folder = os.path.join(current_dir,"../../../uploads/{}/malware_score.json".format(apk_hash))
+        Score_dict = {
+            "Payload Potential":PayPotential,
+            "Proliferation Potential":ProliferationPotential,
+            "Hostility Potential":HostilityPotential,
+            "Malware Score":MalwareScore
+        }
+        with open(output_folder, 'w') as json_file:
+            json.dump(Score_dict, json_file)
         for full_perm in perm:
             # For general android permissions
             prm = full_perm
