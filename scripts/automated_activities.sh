@@ -9,7 +9,9 @@ adb shell input keyevent 6
 # write sms, send it, return to home page
 adb shell am start -a android.intent.action.SENDTO -d sms:12345678 --es sms_body "hello123"
 sleep 2
-adb shell input tap 1326 2268
+adb shell input keyevent 61
+sleep 1
+adb shell input keyevent 66
 sleep 2
 adb shell input keyevent 3
 sleep 2
@@ -18,7 +20,9 @@ sleep 2
 # create new contact, click on cancel when prompted to sync to google, click on save, return to home page
 adb shell am start -a android.intent.action.INSERT -t vnd.android.cursor.dir/contact -e name 'Test' -e phone $(shuf -i 10000000-99999999 -n 1)
 sleep 2
-adb shell input tap 736.5 1403
+adb shell input keyevent 61
+sleep 1
+adb shell input keyevent 66
 sleep 2
 adb shell input tap 1328 182
 sleep 2
@@ -36,9 +40,14 @@ sleep 2
 # open camera, allow, next take image, return to home
 adb shell am start -a android.media.action.IMAGE_CAPTURE
 sleep 2
-adb shell input tap 1045 1356
+adb shell input keyevent 61
+adb shell input keyevent 61
+sleep 1
+adb shell input keyevent 66
 sleep 2
-adb shell input tap 720 2245
+adb shell input keyevent 61
+sleep 1
+adb shell input keyevent 66
 sleep 2
 adb shell input keyevent KEYCODE_CAMERA
 sleep 2
@@ -60,17 +69,40 @@ sleep 2
 # visit google.com, click accept and continue, click no, click on search bar, type 'youtube', enter, click on youtube   
 adb shell am start -a android.intent.action.VIEW -d http://www.google.com
 sleep 2
-adb shell input tap 719.5 2273
-sleep 2
-adb shell input tap 235.5 2273
-sleep 2
-adb shell input tap 721 939.5
-sleep 2
-adb shell input text 'youtube'
-sleep 2
+adb shell input keyevent 61
+adb shell input keyevent 61
+adb shell input keyevent 61
+sleep 1
 adb shell input keyevent 66
 sleep 2
-adb shell input tap 700 900
+adb shell input keyevent 61
+sleep 1
+adb shell input keyevent 66
+sleep 2
+adb shell input keyevent 61
+adb shell input keyevent 61
+adb shell input keyevent 61
+adb shell input keyevent 61
+sleep 1
+adb shell input keyevent 66
+sleep 2
+adb shell input text 'youtube'
+sleep 1
+adb shell input keyevent 66
+sleep 2
+adb shell input keyevent 61
+adb shell input keyevent 61
+adb shell input keyevent 61
+adb shell input keyevent 61
+adb shell input keyevent 61
+adb shell input keyevent 61
+adb shell input keyevent 61
+adb shell input keyevent 61
+adb shell input keyevent 61
+adb shell input keyevent 61
+adb shell input keyevent 61
+sleep 1
+adb shell input keyevent 66
 sleep 10
 
 
@@ -84,7 +116,7 @@ sleep 2
 adb shell input text 'P@ssw0rd'
 sleep 2
 adb shell input keyevent 61
-sleep 2
+sleep 1
 adb shell input keyevent 66
 sleep 2
 
@@ -107,11 +139,9 @@ sleep 2
 adb shell input text '123'
 sleep 2
 adb shell input keyevent 61
-sleep 2
 adb shell input keyevent 61
-sleep 2
 adb shell input keyevent 61
-sleep 2
+sleep 1
 adb shell input keyevent 66
 sleep 2
 adb shell input keyevent 3
