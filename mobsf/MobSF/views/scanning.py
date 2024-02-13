@@ -118,6 +118,8 @@ class Scanning(object):
         """Android APK."""
         md5 = handle_uploaded_file(self.file, '.apk')
         self.data['hash'] = md5
+        global apk_hash
+        apk_hash = md5
         self.data['scan_type'] = 'apk'
         add_to_recent_scan(self.data)
         logger.info('Performing Static Analysis of Android APK')
@@ -320,5 +322,5 @@ class Scanning(object):
                         results.append(result.copy())
                     # logger.info('Results: %s', results)
             response_data = {'results': results, 'errors': errors}
-            logger.info('Response Data: %s', response_data)
+            # logger.info('Response Data: %s', response_data)
             return response_data
