@@ -203,19 +203,22 @@ def automated(request):
             server_url = request.build_absolute_uri('/')
             apikey = api_key()
             output = AutomatedAnalysis(type, server_url, androidactivities, file, apikey, useractivities)
-            template = "general/automated_results.html"
-            context = {
-                'title': 'Automated Analysis Result',
-                'version': settings.MOBSF_VER,
-                'api_key': api_key(),
-                'type': type,
-                'input_path': file,
-                'androidactivities': androidactivities,
-                'server_url': server_url,
-                'output': output,
-            }
-            # redirect to a new URL:
-            return render(request, template, context)
+            if output == "ZipAnalysis":
+                return HttpResponseRedirect("/recent_scans/")
+            else:
+                template = "general/automated_results.html"
+                context = {
+                    'title': 'Automated Analysis Result',
+                    'version': settings.MOBSF_VER,
+                    'api_key': api_key(),
+                    'type': type,
+                    'input_path': file,
+                    'androidactivities': androidactivities,
+                    'server_url': server_url,
+                    'output': output,
+                }
+                # redirect to a new URL:
+                return render(request, template, context)
 
     # if a GET (or any other method) we'll create a blank form
     else:
