@@ -1,0 +1,9 @@
+APKs generated are using the default configuration. Template used is Youtube Lite with all the permissions list permissions enabled.
+CraxsRat APK 12 - QuickInstall, Draw over App, Offline keylogger enabled (Enabling QuickInstall enables the other two options automatically)
+CraxsRat APK 13 - Background Data Usage
+CraxsRat APK 14 - Anti-Emulator
+CraxsRat APK 15 - Request Admin
+CraxsRat APK 16 - Supermod
+CraxsRat APK 17 - Offline Keylogger
+CraxsRat APK 18 - AnUninstall
+CraxsRat APK 19 - Supermod + Modified supermod delay to 5s

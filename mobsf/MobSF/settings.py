@@ -420,7 +420,7 @@ else:
     # ----------VirusTotal--------------------------
     VT_ENABLED = bool(os.getenv('MOBSF_VT_ENABLED', 'True'))
     VT_API_KEY = os.getenv('MOBSF_VT_API_KEY', 'd3bce791213bf5c2970b32a58a80ba25e328894a8c790218cfd34611e199b928')
-    VT_UPLOAD = bool(os.getenv('MOBSF_VT_UPLOAD', ''))
+    VT_UPLOAD = True
     # Before setting VT_ENABLED to True,
     # Make sure VT_API_KEY is set to your VirusTotal API key
     # register at: https://www.virustotal.com/#/join-us

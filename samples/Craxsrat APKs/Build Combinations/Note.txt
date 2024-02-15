@@ -1,0 +1,14 @@
+APKs generated are with default configuration.
+Template used is Youtube Lite.
+Each APK has a different permission enabled.
+CraxsRat APK 27 - Send SMS
+CraxsRat APK 28 - Record Calls
+CraxsRat APK 29 - Change Wallpaper
+CraxsRat APK 30 - Read SMS
+CraxsRat APK 31 - Read Call Logs
+CraxsRat APK 32 - Read Contacts
+CraxsRat APK 33 - Read Accounts
+CraxsRat APK 34 - Camera
+CraxsRat APK 35 - Microphone
+CraxsRat APK 36 - Location
+CraxsRat APK 37 - Make Calls

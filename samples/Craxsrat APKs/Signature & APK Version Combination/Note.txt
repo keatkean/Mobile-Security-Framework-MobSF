@@ -1,0 +1,6 @@
+APKs generated are using the default configurations.
+Template used is Youtube Lite and all permissions in permission list are enabled.
+CraxsRat APK 23 - Signature Version V1
+CraxsRat APK 24 - APK Version V1
+CraxsRat APK 25 - Signature & APK Version V1
+CraxsRat APK 26 - Protect App

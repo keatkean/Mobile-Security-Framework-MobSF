@@ -1,0 +1,4 @@
+APKs generated are with the default configuration.
+They are using the YoutubeLite template as well as having all permissions enabled.
+Craxsrat APK 10 - 20MB size, increased from default 5mb
+Craxsrat APK 11 - Keep alive off

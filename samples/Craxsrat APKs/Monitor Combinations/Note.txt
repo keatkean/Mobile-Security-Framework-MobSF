@@ -1,0 +1,5 @@
+All configurations are set to default.
+Template used is Youtube Lite and all permissions in permissions list are enabled.
+Login information capture is enabled
+CraxsRat APK 21 - Capture Login Information enabled
+CraxsRat APK 22 - Capture Login Information & Capture one enabled

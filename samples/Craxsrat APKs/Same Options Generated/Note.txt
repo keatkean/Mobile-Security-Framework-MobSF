@@ -1,0 +1,5 @@
+APKs generated will be using the default configurations. 
+They will however, be using the YoutubeLite template as well as having all application permissions enabled.
+The app version will be set to 1.1.1.1, package name of test.test.test and App name of test
+Craxsrat APK 8
+Craxsrat APK 9

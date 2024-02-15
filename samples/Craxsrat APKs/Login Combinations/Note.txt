@@ -1,0 +1,4 @@
+All APKs are generated with the default configurations.
+Template used is YoutubeLite and all permissions in permission list are enabled.
+All fields in the login page of the APK are set to test.
+CraxsRat APK 20

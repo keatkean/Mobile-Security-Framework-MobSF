@@ -1,0 +1,8 @@
+APK is configured with default configurations, except only using the following templates.
+Craxsrat APK 1 - YoutubeLite
+Craxsrat APK 2 - Temp Mall
+Craxsrat APK 3 - Google Translate
+Craxsrat APK 4 - Wallpapers App
+Craxsrat APK 5 - App Store
+Craxsrat APK 6 - Proxy App
+Craxsrat APK 7 - Hidden App
