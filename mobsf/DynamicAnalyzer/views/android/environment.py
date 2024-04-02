@@ -36,7 +36,7 @@ from mobsf.MobSF.utils import (
 from mobsf.StaticAnalyzer.models import StaticAnalyzerAndroid
 
 logger = logging.getLogger(__name__)
-ANDROID_API_SUPPORTED = 30
+ANDROID_API_SUPPORTED = 34
 
 
 class Environment:
@@ -148,12 +148,54 @@ class Environment:
             '-r',
             '-t',
             '-d',
+            '-g',
             apk_path], False, True)
         if not out:
+            logger.error('adb install failed')
             return False, 'adb install failed'
-        out = out.decode('utf-8', 'ignore')
+
+        # Check if the installed APK has BIND_ACCESSIBILITY_SERVICE permission
+        accessibility_permission = self.check_accessibility_permission(package)
+        if accessibility_permission:
+            logger.info('Accessibility permission found in installed APK')
+            # Run commands to configure accessibility settings
+            logger.info('Configuring accessibility settings...')
+            self.execute_accessibility_commands()
+        else:
+            logger.info('Accessibility permission not found in installed APK')
+
         # Verify Installation
-        return self.is_package_installed(package, out), out
+        return self.is_package_installed(package, out.decode('utf-8', 'ignore')), out.decode('utf-8', 'ignore')
+    
+    def check_accessibility_permission(self, package):
+        """Check if APK has BIND_ACCESSIBILITY_SERVICE permission."""
+        try:
+            out = self.adb_command(['pm', 'dump', package], True)
+            if out is None:
+                logger.error('Error executing adb command to check permissions')
+                return False
+            return b'BIND_ACCESSIBILITY_SERVICE' in out
+        except Exception:
+            logger.exception('Error checking accessibility permission')
+            return False
+
+    def execute_accessibility_commands(self):
+        """Execute commands to open Accessibility settings and navigate."""
+        logger.info('Opening Accessibility settings')
+        self.adb_command(['shell', 'am', 'start', '-a', 'android.settings.ACCESSIBILITY_SETTINGS'])
+        time.sleep(2)  # Wait for the settings activity to open
+        logger.info('Navigating through Accessibility settings')
+        # Simulate key events to navigate through the Accessibility settings
+        commands = [
+            'KEYCODE_TAB',
+            'KEYCODE_ENTER',
+            'KEYCODE_ENTER',
+            'KEYCODE_TAB',
+            'KEYCODE_ENTER',
+        ]
+        for command in commands:
+            self.adb_command(['shell', 'input', 'keyevent', command])
+            time.sleep(1)  # Add a delay between key events
 
     def adb_command(self, cmd_list, shell=False, silent=False):
         """ADB Command wrapper."""
@@ -352,7 +394,7 @@ class Environment:
                                 'ro.boot.serialno'], True, False)
         out += self.adb_command(['getprop',
                                  'ro.serialno'], True, False)
-        out += self.adb_command(['getprop',
+        out += self.adb_command(['getprop',"""  """
                                  'ro.build.user'], True, False)
         out += self.adb_command(['getprop',
                                  'ro.manufacturer.geny-def'],
