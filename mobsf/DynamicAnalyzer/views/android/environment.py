@@ -34,6 +34,8 @@ from mobsf.MobSF.utils import (
 )
 from mobsf.StaticAnalyzer.models import StaticAnalyzerAndroid
 
+from getaccessibility import *
+
 logger = logging.getLogger(__name__)
 ANDROID_API_SUPPORTED = 29
 
@@ -135,12 +137,24 @@ class Environment:
             '-r',
             '-t',
             '-d',
+            '-g',
             apk_path], False, True)
         if not out:
+            logger.error('adb install failed')
             return False, 'adb install failed'
-        out = out.decode('utf-8', 'ignore')
+
+        # Check if the installed APK has BIND_ACCESSIBILITY_SERVICE permission
+        accessibility_permission = self.check_accessibility_permission(package)
+        if accessibility_permission:
+            logger.info('Accessibility permission found in installed APK')
+            # Run commands to configure accessibility settings
+            logger.info('Configuring accessibility settings...')
+            self.execute_accessibility_commands()
+        else:
+            logger.info('Accessibility permission not found in installed APK')
+
         # Verify Installation
-        return self.is_package_installed(package, out), out
+        return self.is_package_installed(package, out.decode('utf-8', 'ignore')), out.decode('utf-8', 'ignore')
 
     def adb_command(self, cmd_list, shell=False, silent=False):
         """ADB Command wrapper."""
