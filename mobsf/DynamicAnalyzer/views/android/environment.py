@@ -141,6 +141,10 @@ class Environment:
             logger.error('adb install failed')
             return False, 'adb install failed'
 
+        # Change battery optimization settings to "Unrestricted"
+        logger.info('Changing battery optimization settings to "Unrestricted" for %s', package)
+        self.adb_command(['shell', 'cmd', 'deviceidle', 'whitelist', '+{}'.format(package)])
+        
         # Check if the installed APK has BIND_ACCESSIBILITY_SERVICE permission
         accessibility_permission = self.check_accessibility_permission(package)
         if accessibility_permission:
