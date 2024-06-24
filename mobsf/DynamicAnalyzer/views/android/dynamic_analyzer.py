@@ -46,6 +46,7 @@ from mobsf.MobSF.views.authorization import (
     Permissions,
     permission_required,
 )
+from EmulatorLauncher import list_avds, list_running_emulators, get_avd_name, start_emulator, stop_emulator
 
 logger = logging.getLogger(__name__)
 
@@ -128,37 +129,43 @@ def dynamic_analyzer(request, checksum, api=False):
             reinstall = request.GET.get('re_install', '1')
             install = request.GET.get('install', '1')
         if not is_md5(checksum):
-            # We need this check since checksum is not validated
-            # in REST API
-            return print_n_send_error_response(
-                request,
-                'Invalid Hash',
-                api)
+            return print_n_send_error_response(request, 'Invalid Hash', api)
         package = get_package_name(checksum)
         if not package:
-            return print_n_send_error_response(
-                request,
-                'Cannot get package name from checksum',
-                api)
+            return print_n_send_error_response(request, 'Cannot get package name from checksum', api)
         logger.info('Creating Dynamic Analysis Environment for %s', package)
-        try:
+
+        # Auto-start and auto-stop emulator logic
+        avds = list_avds()
+        logger.info(f"Available AVDs: {avds}")
+        running_emulators = list_running_emulators()
+        logger.info(f"Running Emulators: {running_emulators}")
+        running_avds = {get_avd_name(emulator): emulator for emulator in running_emulators}
+        logger.info(f"Running AVDs: {running_avds}")
+
+        emulator_started = False
+        for avd in avds:
+            if avd not in running_avds:
+                logger.info(f"Starting emulator for AVD: {avd}")
+                start_emulator(avd)
+                emulator_started = True
+                break
+
+        if not emulator_started:
             identifier = get_device()
-        except Exception:
-            return print_n_send_error_response(
-                request, get_android_dm_exception_msg(), api)
+        else:
+            # Wait for the emulator to be recognized by ADB
+            time.sleep(30)
+            identifier = get_device()
 
         # Get activities from the static analyzer results
         try:
-            static_android_db = StaticAnalyzerAndroid.objects.get(
-                MD5=checksum)
-            exported_activities = python_list(
-                static_android_db.EXPORTED_ACTIVITIES)
-            activities = python_list(
-                static_android_db.ACTIVITIES)
+            static_android_db = StaticAnalyzerAndroid.objects.get(MD5=checksum)
+            exported_activities = python_list(static_android_db.EXPORTED_ACTIVITIES)
+            activities = python_list(static_android_db.ACTIVITIES)
         except ObjectDoesNotExist:
-            logger.warning(
-                'Failed to get Activities. '
-                'Static Analysis not completed for the app.')
+            logger.warning('Failed to get Activities. Static Analysis not completed for the app.')
+        
         env = Environment(identifier)
         if not env.connect_n_mount():
             msg = 'Cannot Connect to ' + identifier
@@ -171,10 +178,7 @@ def dynamic_analyzer(request, checksum, api=False):
                    'MobSFying the android runtime environment')
             logger.warning(msg)
             if not env.mobsfy_init():
-                return print_n_send_error_response(
-                    request,
-                    'Failed to MobSFy the instance',
-                    api)
+                return print_n_send_error_response(request, 'Failed to MobSFy the instance', api)
             if version < 5:
                 # Start Clipboard monitor
                 env.start_clipmon()
@@ -198,37 +202,38 @@ def dynamic_analyzer(request, checksum, api=False):
         if install == '1':
             # Install APK
             apk_path = Path(settings.UPLD_DIR) / checksum / f'{checksum}.apk'
-            status, output = env.install_apk(
-                apk_path.as_posix(),
-                package,
-                reinstall)
+            status, output = env.install_apk(apk_path.as_posix(), package, reinstall)
             if not status:
                 # Unset Proxy
                 env.unset_global_proxy()
                 msg = (f'This APK cannot be installed. Is this APK '
-                       f'compatible the Android VM/Emulator?\n{output}')
-                return print_n_send_error_response(
-                    request,
-                    msg,
-                    api)
+                       f'compatible with the Android VM/Emulator?\n{output}')
+                return print_n_send_error_response(request, msg, api)
         logger.info('Testing Environment is Ready!')
-        context = {'package': package,
-                   'hash': checksum,
-                   'android_version': version,
-                   'version': settings.MOBSF_VER,
-                   'activities': activities,
-                   'exported_activities': exported_activities,
-                   'title': 'Dynamic Analyzer'}
+        context = {
+            'package': package,
+            'hash': checksum,
+            'android_version': version,
+            'version': settings.MOBSF_VER,
+            'activities': activities,
+            'exported_activities': exported_activities,
+            'title': 'Dynamic Analyzer'
+        }
         template = 'dynamic_analysis/android/dynamic_analyzer.html'
         if api:
             return context
         return render(request, template, context)
-    except Exception:
+    except Exception as e:
         logger.exception('Dynamic Analyzer')
-        return print_n_send_error_response(
-            request,
-            'Dynamic Analysis Failed.',
-            api)
+        return print_n_send_error_response(request, f'Dynamic Analysis Failed: {e}', api)
+    finally:
+        # Stop the emulator if it was started by this function
+        if emulator_started:
+            running_emulators = list_running_emulators()
+            for emulator in running_emulators:
+                if get_avd_name(emulator) == avd:
+                    logger.info(f"Stopping emulator: {emulator} for AVD: {avd}")
+                    stop_emulator(emulator)
 
 
 @login_required
