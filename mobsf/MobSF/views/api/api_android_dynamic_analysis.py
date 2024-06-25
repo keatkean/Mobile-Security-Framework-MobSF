@@ -16,6 +16,8 @@ from mobsf.DynamicAnalyzer.views.common import (
     device,
     frida,
 )
+from EmulatorLauncher import list_avds, list_running_emulators, get_avd_name, start_emulator, stop_emulator
+
 
 
 # Dynamic Analyzer APIs
@@ -33,6 +35,7 @@ def api_get_apps(request):
 @csrf_exempt
 def api_start_analysis(request):
     """POST - Start Dynamic Analysis."""
+    avds = list_avds()
     if 'hash' not in request.POST:
         return make_api_response(
             {'error': 'Missing Parameters'}, 422)
@@ -40,6 +43,13 @@ def api_start_analysis(request):
         request,
         request.POST['hash'],
         True)
+    
+    if 'avd_name' not in request.POST:
+        pass
+    
+    elif request.POST.get('avd_name') not in avds:
+         return make_api_response({'error': "Invalid AVD name specified.", 'available_avds': avds}, 422)
+
     if 'error' in resp:
         return make_api_response(resp, 500)
     return make_api_response(resp, 200)

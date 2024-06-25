@@ -125,9 +125,12 @@ def dynamic_analyzer(request, checksum, api=False):
         if api:
             reinstall = request.POST.get('re_install', '1')
             install = request.POST.get('install', '1')
+            avd_name = request.POST.get('avd_name', None)
         else:
             reinstall = request.GET.get('re_install', '1')
             install = request.GET.get('install', '1')
+            avd_name = request.GET.get('avd_name', None)
+
         if not is_md5(checksum):
             return print_n_send_error_response(request, 'Invalid Hash', api)
         package = get_package_name(checksum)
@@ -144,12 +147,24 @@ def dynamic_analyzer(request, checksum, api=False):
         logger.info(f"Running AVDs: {running_avds}")
 
         emulator_started = False
-        for avd in avds:
-            if avd not in running_avds:
-                logger.info(f"Starting emulator for AVD: {avd}")
-                start_emulator(avd)
-                emulator_started = True
-                break
+        if avd_name:
+            selected_avd = avd_name
+        else:
+            selected_avd = avds[0]
+            emulator_started = True
+            
+        if not selected_avd:
+            msg = 'No AVD specified and no AVDs are available. Here are the available AVDs: '
+            msg += ', '.join(avds) if avds else 'None'
+            if api:
+                return {'error': msg, 'available_avds': avds}
+            else:
+                return print_n_send_error_response(request, msg, api)
+
+        if selected_avd not in running_avds:
+            logger.info(f"Starting emulator for AVD: {selected_avd}")
+            start_emulator(selected_avd)
+            emulator_started = True
 
         if not emulator_started:
             identifier = get_device()
@@ -231,8 +246,8 @@ def dynamic_analyzer(request, checksum, api=False):
         if emulator_started:
             running_emulators = list_running_emulators()
             for emulator in running_emulators:
-                if get_avd_name(emulator) == avd:
-                    logger.info(f"Stopping emulator: {emulator} for AVD: {avd}")
+                if get_avd_name(emulator) == selected_avd:
+                    logger.info(f"Stopping emulator: {emulator} for AVD: {selected_avd}")
                     stop_emulator(emulator)
 
 
