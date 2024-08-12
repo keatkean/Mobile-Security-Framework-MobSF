@@ -124,10 +124,13 @@ def static_analyzer(request, checksum, api=False):
     try:
         if 'timeout' in request.POST:
             timeout = int(request.POST['timeout'])
+            if timeout < 1:
+                data =  {"status":"failed",
+                 "error": "timeout value must a be a positive integer"}
+                return make_api_response(data, api)
         else:
             timeout = default_timeout_value
-    
-        print('timeout:', timeout)
+
          # Create a Timer object with the desired timeout value
         t = Timer(timeout, timeout_func, args=[request], kwargs=None)  # Adjust timeout value as needed
 
